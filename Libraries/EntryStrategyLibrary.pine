@@ -1,5 +1,4 @@
-//testing automatic workflow pt2...
-
+//@version=6
 type ConditionDictionary
 	array<string> keys = na 
 	array<bool> values = na 
