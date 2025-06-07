@@ -28,8 +28,8 @@ enum ENTRY_ACTION_TYPE
 type EntryAction 
 	string name = na 
 	ENTRY_ACTION_TYPE type = na 
-	TradeLibrary.Direction trade_direction = na 
-	TradeLibrary.OrderType order_type = na 
+	Direction trade_direction = na 
+	OrderType order_type = na 
 
 
 type EntryRule
@@ -56,7 +56,7 @@ type EntryLibraryArgs
 	array<BooleanExpressionLibrary.BooleanExpression> compound_conditions = na 
 	array<EntryAction> entry_actions = na 
 	EntryLibraryOutput output = na
-	TradeLibrary.TradeLibraryArgs trade_library_args = na
+	TradeLibraryArgs trade_library_args = na
 	bool process_longs = true 
 	bool process_shorts = true 
 create_EntryLibraryArgs() => 
@@ -66,7 +66,7 @@ create_EntryLibraryArgs() =>
 	args.compound_conditions := array.new<BooleanExpressionLibrary.BooleanExpression>()
 	args.entry_actions := array.new<EntryAction>()
 	args.output := create_EntryLibraryOutput()
-	args.trade_library_args := TradeLibrary.create_TradeLibraryArgs()
+	args.trade_library_args := create_TradeLibraryArgs()
 	args
 
 
@@ -135,13 +135,13 @@ stringify_conditions(EntryLibraryArgs args) =>
 //////// FUNCTIONS FOR ACTIONS
 //////////////////////////////////
 
-create_EntryAction(string name, ENTRY_ACTION_TYPE action_type, TradeLibrary.Direction trade_direction, TradeLibrary.OrderType order_type) => 
+create_EntryAction(string name, ENTRY_ACTION_TYPE action_type, Direction trade_direction, OrderType order_type) => 
 	EntryAction action = EntryAction.new(name, action_type, trade_direction, order_type)
 	action 
 // not to be used with the same action on every candle 
 add_EntryAction(EntryLibraryArgs args, EntryAction action) =>
 	args.entry_actions.push(action)
-create_and_add_EntryAction(EntryLibraryArgs args, string name, ENTRY_ACTION_TYPE action_type, TradeLibrary.Direction trade_direction, TradeLibrary.OrderType order_type) =>
+create_and_add_EntryAction(EntryLibraryArgs args, string name, ENTRY_ACTION_TYPE action_type, Direction trade_direction, OrderType order_type) =>
 	EntryAction action = create_EntryAction(name, action_type, trade_direction, order_type)
 	add_EntryAction(args, action)
 	action // return action object so function can be used with var to be called once per script 
@@ -158,8 +158,8 @@ get_action_by_name(EntryLibraryArgs args, string name) =>
 
 // needs to be called on the same candle that the entry is for
 create_trade_from_EntryAction(EntryAction action, int candle_index) =>
-	bool is_long = action.trade_direction == TradeLibrary.Direction.Long 
-	bool is_short = action.trade_direction == TradeLibrary.Direction.Short
+	bool is_long = action.trade_direction == Direction.Long 
+	bool is_short = action.trade_direction == Direction.Short
 	float entry_price = 0
 	float stop_loss_price = 0
 	float target_price = 0
@@ -173,7 +173,7 @@ create_trade_from_EntryAction(EntryAction action, int candle_index) =>
 
 	//set target at 1R for now 
 	float rr = 1
-	TradeLibrary.Entry entry = TradeLibrary.create_Entry_with_target_RR(action.trade_direction, action.order_type, entry_price, stop_loss_price, rr, candle_index)
+	Entry entry = create_Entry_with_target_RR(action.trade_direction, action.order_type, entry_price, stop_loss_price, rr, candle_index)
 	entry
 
 take_active_trades(EntryLibraryArgs args) =>
@@ -181,8 +181,8 @@ take_active_trades(EntryLibraryArgs args) =>
 	if active_actions.size() > 0 
 		for i = active_actions.size() - 1 to 0 
 			EntryAction current_action = active_actions.get(i)
-			TradeLibrary.Entry entry = create_trade_from_EntryAction(current_action, bar_index)
-			TradeLibrary.place_trade(args.trade_library_args, entry)
+			Entry entry = create_trade_from_EntryAction(current_action, bar_index)
+			place_trade(args.trade_library_args, entry)
 
 
 	
@@ -241,8 +241,8 @@ process_EntryRules(EntryLibraryArgs args) =>
 			
 			if all_conditions_met
 				//process if we are allowed to take longs and/or shorts 
-				bool is_long = current_rule.action.trade_direction == TradeLibrary.Direction.Long
-				bool is_short = current_rule.action.trade_direction == TradeLibrary.Direction.Short
+				bool is_long = current_rule.action.trade_direction == Direction.Long
+				bool is_short = current_rule.action.trade_direction == Direction.Short
 				if (is_long and args.process_longs) or (is_short and args.process_shorts)
 					args.output.taken_actions.push(current_rule.action)
 					args.output.has_output := true
