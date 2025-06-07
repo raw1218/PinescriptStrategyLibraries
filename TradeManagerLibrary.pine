@@ -265,7 +265,7 @@ process_trade_win(TradeLibraryArgs args, Entry entry) =>
 
 
 // Checks a single candle (high/low) against a single entry and updates its state
-processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
+TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
     //ignore if this is the same index
     if entry.index != bar_index
         isLong = entry.dir == Direction.Long
@@ -294,12 +294,12 @@ processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, floa
 
 
 // Loops over all trades and processes them using the current candle's high/low
-process_candle(TradeLibraryArgs args) =>
+TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
     args.something_has_changed := false 
     if args.entry_array.size() > 0
         for i = args.entry_array.size() - 1 to 0
             Entry current_entry = args.entry_array.get(i)
-            processCandleForEntry(args, current_entry, high, low)
+            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
 
 // Removes trades that are no longer active (Invalidated, Success, or Loss)
 remove_all_finished_trades(TradeLibraryArgs args) =>
