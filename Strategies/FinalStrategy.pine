@@ -1,0 +1,111 @@
+
+//place a trade based on an entry 
+FinalStrategy_process_entry(Entry entry) =>
+    bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)
+    if should_place_trade
+        string trade_id = str.tostring(entry.index)
+        entry.additional_data.trade_id := trade_id
+        bool is_long = entry.dir == Direction.Long
+        bool is_short = entry.dir == Direction.Short
+        bool is_entry_limit = entry.orderType == OrderType.Limit
+        bool is_entry_stop = entry.orderType == OrderType.Stop
+        if is_entry_limit
+            strategy.entry(id = trade_id, direction = is_long ? strategy.long : strategy.short, limit = entry.entryPrice, qty = entry.num_shares)
+        if is_entry_stop
+            strategy.entry(id = trade_id, direction = is_long ? strategy.long : strategy.short, stop = entry.entryPrice, qty = entry.num_shares)
+        string exit_id = "exit_" + trade_id
+        strategy.exit(id = exit_id, from_entry = trade_id, stop = entry.stopLossPrice, limit = entry.targetPrice)
+
+    bool should_cancel_trade = (entry.state == EntryState.Invalidated)
+    if should_cancel_trade
+        strategy.cancel(id = entry.additional_data.trade_id)
+
+
+
+
+//////////////////////////////////////// TESTING ///////////////////////////////////////////
+
+var EntryLibraryArgs args = create_EntryLibraryArgs()
+// want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
+
+// simple conditions
+var string red_candle_condition_name = "is_red_candle"
+var string green_candle_condition_name = "is_green_candle"
+var string up_candle_condition_name = "is_up_candle"
+var string down_candle_condition_name = "is_down_candle"
+is_current_candle_red() =>
+	close < open
+is_current_candle_green() => 
+	close > open 
+is_candle_up() => 
+	(high > high[1]) and (low > low[1])
+is_candle_down() => 
+	(high < high[1]) and (low < low[1])
+update_simple_condition(args,red_candle_condition_name,is_current_candle_red())
+update_simple_condition(args,green_candle_condition_name, is_current_candle_green())
+update_simple_condition(args, up_candle_condition_name, is_candle_up())
+update_simple_condition(args, down_candle_condition_name, is_candle_down())
+
+var string past_start_time_condition_name = "is_past_start_time"
+is_after_datetime(int year_in, int month_in, int day_in, int hour_in, int minute_in) =>
+    int target_timestamp = timestamp("UTC", year_in, month_in, day_in, hour_in, minute_in)
+    bool is_past = time >= target_timestamp
+    is_past
+update_simple_condition(args,past_start_time_condition_name, is_after_datetime(2025,6,4,0,0))
+
+// compound conditions 
+var string red_up_candle_condition_name = "is_red_up_candle"
+var string green_down_candle_condition_name = "is_green_down_candle"
+var red_up_condition = create_and_add_compound_condition(args, red_up_candle_condition_name, red_candle_condition_name, up_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
+var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
+
+
+
+// entry actions 
+var entry_action_long_stop_name = "Place Long Stop On Current Candle"
+var entry_action_short_stop_name = "Place Short Stop On Current Candle"
+var EntryAction entry_action_long_stop = create_and_add_EntryAction(args, entry_action_long_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Long, OrderType.Stop)
+var EntryAction entry_action_short_stop = create_and_add_EntryAction(args, entry_action_short_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Short, OrderType.Stop)
+
+// rules 
+var string red_up_rule_name = "Red_Up_Candle_Rule"
+var string green_down_rule_name = "Green_Down_Candle_Rule"
+var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name)
+var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name)
+
+add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
+add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
+
+
+var label my_label = na 
+// if not na(my_label)
+// 	my_label.delete()
+
+args.process_longs := true 
+args.process_shorts := false 
+args.trade_library_args.parameters.pyramiding_allowed := false 
+EntryStrategyLibrary_process_candle(args)
+
+//print out the trades in the trade library 
+bool should_print = args.trade_library_args.something_has_changed or barstate.islast
+string my_text = ""
+if should_print
+    my_text := stringify_all_trades(args.trade_library_args)
+    my_text += "\n\n" + stringify_TradeDataCollector(args.trade_library_args.data_collector)
+    if not na(my_text)
+        my_label := label.new(text = my_text, x = bar_index, y = high)
+
+
+array<Entry> entries = args.trade_library_args.entry_array
+if entries.size() > 0 
+    for i = entries.size() - 1 to 0 
+        process_entry(entries.get(i))
+
+
+
+remove_all_finished_trades(args.trade_library_args)
+
+
+	
+
+
