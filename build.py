@@ -2,9 +2,9 @@ import os
 
 # List of files in the order you want them combined
 FILES = [
+    "Libraries/TradeManagerLibrary.pine",
     "Libraries/BooleanExpressionLibrary.pine",
     "Libraries/EntryStrategyLibrary.pine",
-    "Libraries/TradeManagerLibrary.pine",
     "Strategies/FinalStrategy.pine"
 ]
 
