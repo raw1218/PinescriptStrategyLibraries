@@ -1,4 +1,5 @@
 // === Libraries/BooleanExpressionLibrary.pine ===
+//@version=6
 // === ENUMS ===
 
 // Represents logical Boolean operators
@@ -106,8 +107,7 @@ evaluate_BooleanExpression(BooleanExpression expression) =>
 
 
 // === Libraries/EntryStrategyLibrary.pine ===
-//testing automatic workflow pt2...
-
+//@version=6
 type ConditionDictionary
 	array<string> keys = na 
 	array<bool> values = na 
@@ -378,7 +378,7 @@ EntryStrategyLibrary_process_candle(EntryLibraryArgs args) =>
 
 
 // === Libraries/TradeManagerLibrary.pine ===
-
+//@version=6
 // === ENUM DEFINITIONS ===
 
 // Direction of the trade
@@ -709,7 +709,8 @@ stringify_all_trades(TradeLibraryArgs args) =>
 
 
 // === Strategies/FinalStrategy.pine ===
-
+//@version=6
+strategy("FinalStrat")
 //place a trade based on an entry 
 FinalStrategy_process_entry(Entry entry) =>
     bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)
