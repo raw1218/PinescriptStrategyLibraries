@@ -768,8 +768,8 @@ update_simple_condition(args,past_start_time_condition_name, is_after_datetime(2
 // compound conditions 
 var string red_up_candle_condition_name = "is_red_up_candle"
 var string green_down_candle_condition_name = "is_green_down_candle"
-var red_up_condition = create_and_add_compound_condition(args, red_up_candle_condition_name, red_candle_condition_name, up_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
-var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
+var red_up_condition = create_and_add_compound_condition(args, red_up_candle_condition_name, red_candle_condition_name, up_candle_condition_name, BOOLEAN_OPERATOR.AND)
+var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BOOLEAN_OPERATOR.AND)
 
 
 
