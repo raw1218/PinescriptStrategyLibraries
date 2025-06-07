@@ -1,0 +1,824 @@
+// === Libraries/BooleanExpressionLibrary.pine ===
+// === ENUMS ===
+
+// Represents logical Boolean operators
+enum BOOLEAN_OPERATOR
+    AND     // Logical AND
+    OR      // Logical OR
+    NOT     // Logical NOT (unary)
+	IS     // default 
+is_BOOLEAN_OPERATOR_binary(BOOLEAN_OPERATOR op) =>
+	bool result = false 
+	if op == BOOLEAN_OPERATOR.AND
+		result := true
+	else if op == BOOLEAN_OPERATOR.OR
+		result := true
+	result
+
+
+// === TYPES ===
+
+// Struct for representing a Boolean expression node (base level or composite)
+// - If `is_base_level_expression` is true, the node is a leaf with a fixed boolean value
+// - Otherwise, it's a composite expression with an operator and children
+type BooleanExpression
+    string name = na // the name of the expression / condition 
+    bool is_base_level_expression = false          // True if this node is a leaf
+    bool base_level_expression = false             // Value for base-level expressions
+    BooleanExpression left_expression = na         // Left child (required)
+    BooleanExpression right_expression = na        // Right child (optional for NOT)
+    BOOLEAN_OPERATOR operator = na                 // Operator applied to children
+    bool evaluated_value = false                   // Cached evaluation result
+
+
+
+// Creates a BooleanExpression struct with all required values
+create_BooleanExpression(string name, bool is_base_level, bool base_level_val, BOOLEAN_OPERATOR operator, BooleanExpression left_val, BooleanExpression right_val) =>
+    BooleanExpression expr = BooleanExpression.new(name, is_base_level, base_level_val, left_val, right_val, operator, false)
+    expr
+
+// Frame used to simulate recursive evaluation using an explicit stack
+// Tracks whether children have been evaluated yet
+type EvaluationFrame
+    BooleanExpression node = na
+    bool left_result = false
+    bool right_result = false
+    bool evaluated_left = false
+    bool evaluated_right = false
+
+// === MAIN EVALUATION FUNCTION ===
+
+// Evaluates a BooleanExpression tree using a manual stack (non-recursive)
+// Handles nested AND/OR/NOT logic in order, from bottom-up
+// Caches result in node.evaluated_value and returns final result
+evaluate_BooleanExpression(BooleanExpression expression) =>
+    array<EvaluationFrame> stack = array.new<EvaluationFrame>()
+    EvaluationFrame root = EvaluationFrame.new(expression, false, false, false, false)
+    array.push(stack, root)
+    bool final_result = false
+
+    while array.size(stack) > 0
+        EvaluationFrame frame = stack.pop()
+
+        // Case 1: Base-level expression (leaf node)
+        if frame.node.is_base_level_expression
+            frame.node.evaluated_value := frame.node.base_level_expression
+
+        // Case 2: Evaluate left side first
+        else if not frame.evaluated_left
+            EvaluationFrame left = EvaluationFrame.new(frame.node.left_expression, false, false, false, false)
+            frame.evaluated_left := true
+            array.push(stack, frame)
+            array.push(stack, left)
+
+        // Case 3: Evaluate right side (for binary ops only)
+        else if is_BOOLEAN_OPERATOR_binary(frame.node.operator) and not frame.evaluated_right
+            EvaluationFrame right = EvaluationFrame.new(frame.node.right_expression, false, false, false, false)
+            frame.evaluated_right := true
+            array.push(stack, frame)
+            array.push(stack, right)
+
+        // Case 4: Both children evaluated — now compute result
+        else
+            bool expression_result = false
+            bool left_value = false
+            bool right_value = false
+            if frame.evaluated_left
+                left_value := frame.node.left_expression.evaluated_value
+            if frame.evaluated_right
+                right_value := frame.node.right_expression.evaluated_value
+
+            if frame.node.operator == BOOLEAN_OPERATOR.NOT
+                expression_result := not left_value
+			else if frame.node.operator == BOOLEAN_OPERATOR.IS
+				expression_result := left_value
+            else if frame.node.operator == BOOLEAN_OPERATOR.AND
+                expression_result := left_value and right_value
+            else if frame.node.operator == BOOLEAN_OPERATOR.OR
+                expression_result := left_value or right_value
+
+            frame.node.evaluated_value := expression_result
+
+    final_result
+
+
+
+
+
+// === Libraries/EntryStrategyLibrary.pine ===
+
+
+type ConditionDictionary
+	array<string> keys = na 
+	array<bool> values = na 
+create_ConditionDictionary() =>
+	ConditionDictionary dict = ConditionDictionary.new() 
+	dict.keys := array.new<string>()
+	dict.values := array.new<bool>()
+	dict 
+//returns true if we added a new entry
+ConditionDictionary_set_value(ConditionDictionary dict, string key, bool value) =>
+    int index = array.indexof(dict.keys, key)
+    if index != -1
+        array.set(dict.values, index, value)
+		false 
+    else
+        dict.keys.push(key)
+        dict.values.push(value)
+		true
+ConditionDictionary_get_value(ConditionDictionary dict, string key) => 
+    int index = array.indexof(dict.keys, key)
+    if index != -1
+        dict.values.get(index)
+
+
+enum ENTRY_ACTION_TYPE 
+	EntryIsCandle //the entry is at one end of the candle with the stoploss at the other end
+type EntryAction 
+	string name = na 
+	ENTRY_ACTION_TYPE type = na 
+	TradeLibrary.Direction trade_direction = na 
+	TradeLibrary.OrderType order_type = na 
+
+
+type EntryRule
+	string rule_name = na 
+	array<BooleanExpressionLibrary.BooleanExpression> conditions = na 
+	EntryAction action = na 
+
+	
+type EntryLibraryOutput
+	bool has_output = false 
+	array<EntryAction> taken_actions = na
+create_EntryLibraryOutput() =>
+	EntryLibraryOutput output = EntryLibraryOutput.new() 
+	output.taken_actions := array.new<EntryAction>()
+	output
+reset_EntryLibraryOutput(EntryLibraryOutput output) =>
+	output.has_output := false 
+	output.taken_actions.clear()
+
+	
+type EntryLibraryArgs
+	ConditionDictionary condition_dict = na 
+	array<EntryRule> entry_rules = na 
+	array<BooleanExpressionLibrary.BooleanExpression> compound_conditions = na 
+	array<EntryAction> entry_actions = na 
+	EntryLibraryOutput output = na
+	TradeLibrary.TradeLibraryArgs trade_library_args = na
+	bool process_longs = true 
+	bool process_shorts = true 
+create_EntryLibraryArgs() => 
+	EntryLibraryArgs args = EntryLibraryArgs.new() 
+	args.condition_dict := create_ConditionDictionary()
+	args.entry_rules := array.new<EntryRule>()
+	args.compound_conditions := array.new<BooleanExpressionLibrary.BooleanExpression>()
+	args.entry_actions := array.new<EntryAction>()
+	args.output := create_EntryLibraryOutput()
+	args.trade_library_args := TradeLibrary.create_TradeLibraryArgs()
+	args
+
+
+///////////////////////////////////
+//////// FUNCTIONS FOR CONDITIONS 
+//////////////////////////////////
+
+
+get_condition_by_name(EntryLibraryArgs args, string name) => 
+	bool found_condition = false 
+	BooleanExpressionLibrary.BooleanExpression condition = na 
+	if args.compound_conditions.size() > 0
+		for i = args.compound_conditions.size() - 1 to 0 
+			BooleanExpressionLibrary.BooleanExpression current_cond = args.compound_conditions.get(i)
+			if current_cond.name == name 
+				found_condition := true 
+				condition := current_cond
+	
+	condition
+
+create_and_add_compound_condition_helper(EntryLibraryArgs args, string name, bool is_simple_condition, string left_condition_name, string right_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR op) => 
+	BooleanExpressionLibrary.BooleanExpression cond = na
+	if is_simple_condition
+		cond := BooleanExpressionLibrary.create_BooleanExpression(name = name, is_base_level = is_simple_condition, base_level_val = false, left_val = na, right_val = na, operator = na)
+	else
+		BooleanExpressionLibrary.BooleanExpression left_condition = get_condition_by_name(args, left_condition_name)
+		BooleanExpressionLibrary.BooleanExpression right_condition = get_condition_by_name(args, right_condition_name)
+		cond := BooleanExpressionLibrary.create_BooleanExpression(name = name, is_base_level = is_simple_condition, base_level_val = false, operator = op, left_val = left_condition, right_val = right_condition)
+	args.compound_conditions.push(cond)
+	cond //return the condition so we can use with var statement to call once per script 
+
+create_and_add_compound_condition(EntryLibraryArgs args, string name, string left_condition_name, string right_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR op) =>
+	create_and_add_compound_condition_helper(args, name, false, left_condition_name, right_condition_name, op)
+
+update_simple_condition(EntryLibraryArgs args, string condition_name, bool current_value) => 
+	bool new_entry = ConditionDictionary_set_value(args.condition_dict, condition_name, current_value)
+	if new_entry
+		create_and_add_compound_condition_helper(args, condition_name, true, na, na, na) // adds simple condition
+
+	//update the value of the compound condition
+	BooleanExpressionLibrary.BooleanExpression expr = get_condition_by_name(args, condition_name)
+	expr.base_level_expression := current_value 
+
+
+evaluate_conditions(EntryLibraryArgs args) =>
+	array<BooleanExpressionLibrary.BooleanExpression> conditions = args.compound_conditions
+	if conditions.size() > 0
+		for i = conditions.size() - 1 to 0 
+			BooleanExpressionLibrary.BooleanExpression current_condition = conditions.get(i)
+			BooleanExpressionLibrary.evaluate_BooleanExpression(current_condition)
+
+
+stringify_conditions(EntryLibraryArgs args) => 
+	string my_string = "Conditions:\n"
+	array<BooleanExpressionLibrary.BooleanExpression> conditions = args.compound_conditions
+	if conditions.size() > 0
+		for i = conditions.size() - 1 to 0 
+			BooleanExpressionLibrary.BooleanExpression current_condition = conditions.get(i)
+			my_string += current_condition.name + " = " +str.tostring(current_condition.evaluated_value) + "\n"
+
+
+
+	
+
+///////////////////////////////////
+//////// FUNCTIONS FOR ACTIONS
+//////////////////////////////////
+
+create_EntryAction(string name, ENTRY_ACTION_TYPE action_type, TradeLibrary.Direction trade_direction, TradeLibrary.OrderType order_type) => 
+	EntryAction action = EntryAction.new(name, action_type, trade_direction, order_type)
+	action 
+// not to be used with the same action on every candle 
+add_EntryAction(EntryLibraryArgs args, EntryAction action) =>
+	args.entry_actions.push(action)
+create_and_add_EntryAction(EntryLibraryArgs args, string name, ENTRY_ACTION_TYPE action_type, TradeLibrary.Direction trade_direction, TradeLibrary.OrderType order_type) =>
+	EntryAction action = create_EntryAction(name, action_type, trade_direction, order_type)
+	add_EntryAction(args, action)
+	action // return action object so function can be used with var to be called once per script 
+
+get_action_by_name(EntryLibraryArgs args, string name) => 
+	EntryAction Action = na 
+	if args.entry_actions.size() > 0
+		for i = args.entry_actions.size() - 1 to 0 
+			EntryAction cur_entry = args.entry_actions.get(i)
+			if cur_entry.name == name 
+				Action := cur_entry
+	Action
+
+
+// needs to be called on the same candle that the entry is for
+create_trade_from_EntryAction(EntryAction action, int candle_index) =>
+	bool is_long = action.trade_direction == TradeLibrary.Direction.Long 
+	bool is_short = action.trade_direction == TradeLibrary.Direction.Short
+	float entry_price = 0
+	float stop_loss_price = 0
+	float target_price = 0
+	if action.type == ENTRY_ACTION_TYPE.EntryIsCandle
+		if is_long 
+			entry_price := high 
+			stop_loss_price := low 
+		else if is_short 
+			entry_price := low 
+			stop_loss_price := high 
+
+	//set target at 1R for now 
+	float rr = 1
+	TradeLibrary.Entry entry = TradeLibrary.create_Entry_with_target_RR(action.trade_direction, action.order_type, entry_price, stop_loss_price, rr, candle_index)
+	entry
+
+take_active_trades(EntryLibraryArgs args) =>
+	array<EntryAction> active_actions = args.output.taken_actions
+	if active_actions.size() > 0 
+		for i = active_actions.size() - 1 to 0 
+			EntryAction current_action = active_actions.get(i)
+			TradeLibrary.Entry entry = create_trade_from_EntryAction(current_action, bar_index)
+			TradeLibrary.place_trade(args.trade_library_args, entry)
+
+
+	
+///////////////////////////////////
+//////// FUNCTIONS FOR RULES
+//////////////////////////////////
+
+create_and_add_EntryRule(EntryLibraryArgs args, string name, string condition_name, string action_name) => 
+	//look for the condition by its name 
+	BooleanExpressionLibrary.BooleanExpression cond = get_condition_by_name(args, condition_name)
+	EntryAction action = get_action_by_name(args, action_name)
+	array<BooleanExpressionLibrary.BooleanExpression> conditions = array.new<BooleanExpressionLibrary.BooleanExpression>()
+	conditions.push(cond)
+	EntryRule rule = EntryRule.new(name, conditions, action)
+	args.entry_rules.push(rule)
+	rule 
+	
+
+get_rule_by_name(EntryLibraryArgs args, string name) => 
+	EntryRule rule = na 
+	array<EntryRule> entry_rules = args.entry_rules
+	if entry_rules.size() > 0 
+		for i = entry_rules.size() - 1 to 0 
+			EntryRule current_rule = entry_rules.get(i)
+			if current_rule.rule_name == name 
+				rule := current_rule 
+	rule
+	
+
+add_condition_to_EntryRule(EntryLibraryArgs args, string rule_name, string condition_name) => 
+	EntryRule rule = get_rule_by_name(args, rule_name)
+	BooleanExpressionLibrary.BooleanExpression cond = get_condition_by_name(args, condition_name)
+
+	//add condition if it does not already exist
+	bool already_exists = false 
+	if rule.conditions.size() > 0 
+		for i = rule.conditions.size() - 1 to 0
+			if rule.conditions.get(i).name == condition_name 
+				already_exists := true 
+	
+	if not already_exists
+		rule.conditions.push(cond)
+
+
+
+process_EntryRules(EntryLibraryArgs args) => 
+	array<EntryRule> entry_rules = args.entry_rules 
+	if entry_rules.size() > 0
+		for i = entry_rules.size() - 1 to 0 
+			EntryRule current_rule = entry_rules.get(i)
+			//make sure all conditions are valid 
+			bool all_conditions_met = true
+			for j = current_rule.conditions.size() - 1 to 0
+				if current_rule.conditions.get(j).evaluated_value != true 
+					all_conditions_met := false 
+			
+			if all_conditions_met
+				//process if we are allowed to take longs and/or shorts 
+				bool is_long = current_rule.action.trade_direction == TradeLibrary.Direction.Long
+				bool is_short = current_rule.action.trade_direction == TradeLibrary.Direction.Short
+				if (is_long and args.process_longs) or (is_short and args.process_shorts)
+					args.output.taken_actions.push(current_rule.action)
+					args.output.has_output := true
+				
+				
+has_output(EntryLibraryArgs args) =>
+	args.output.has_output
+get_output(EntryLibraryArgs args) =>
+	args.output.taken_actions
+
+EntryStrategyLibrary_process_candle(EntryLibraryArgs args) => 
+	// clear the output 
+	reset_EntryLibraryOutput(args.output)
+	//first evaluate / update conditions
+	evaluate_conditions(args)
+	// then check rules for conditions that have been met 
+	process_EntryRules(args)
+	//then take each active trade action and create a trade from it 
+	take_active_trades(args)
+	//process the trades with the trade library 
+	TradeManagerLibrary_process_candle(args.trade_library_args)
+	
+
+
+
+// === Libraries/TradeManagerLibrary.pine ===
+
+// === ENUM DEFINITIONS ===
+
+// Direction of the trade
+enum Direction
+    Long    // Buy-side setup
+    Short   // Sell-side setup
+stringify_Direction(Direction dir) =>
+    string result = ""
+    if dir == Direction.Long
+        result := "Long"
+    else if dir == Direction.Short
+        result := "Short"
+    result
+
+
+// Order type (reserved for future use; not used in core logic)
+enum OrderType
+    Limit
+    Stop
+stringify_OrderType(OrderType t) =>
+    string result = ""
+    if t == OrderType.Limit
+        result := "Limit"
+    else if t == OrderType.Stop
+        result := "Stop"
+    result
+
+
+// Current state of a trade
+enum EntryState
+    Placed         // Waiting to be triggered
+    Entered        // Actively in a trade
+    Invalidated    // Stopped before entry (e.g. stop hit first)
+    Success        // Target hit
+    Loss           // Stop loss hit
+stringify_EntryState(EntryState s) =>
+    string result = ""
+    if s == EntryState.Placed
+        result := "Placed"
+    else if s == EntryState.Entered
+        result := "Entered"
+    else if s == EntryState.Invalidated
+        result := "Invalidated"
+    else if s == EntryState.Success
+        result := "Success"
+    else if s == EntryState.Loss
+        result := "Loss"
+    result
+
+
+// === ENTRY STRUCTURE ===
+type EntryAdditionalData
+    int placed_on_index = 0
+    int entered_on_index = 0 
+    int invalidated_on_index = 0 
+    int lost_on_index = 0
+    int won_on_index = 0
+    string trade_id = na //for strategy tester 
+// Represents a single trade
+type Entry
+    Direction dir              // Trade direction
+    OrderType orderType        // Entry type (not currently used in logic)
+    float entryPrice           // Entry level
+    float stopLossPrice        // Stop loss level
+    float targetPrice          // Target level
+    float risk_reward_ratio
+    EntryState state           // Current status of this trade
+    int num_shares             // Optional: share/contract size (default = 1)
+    int index                  // bar index (needed to not process the hitting of the stop loss on the actual entry candle)
+    EntryAdditionalData additional_data
+
+stringify_Entry(Entry e) =>
+    string result = "ENTRY (index = " + str.tostring(e.index) + " )\n"
+    result += "\tDir: " + stringify_Direction(e.dir) + "\n"
+    result += "\tType: " + stringify_OrderType(e.orderType) + "\n"
+    result += "\tEntry: " + str.tostring(e.entryPrice) + "\n"
+    result += "\tSL: " + str.tostring(e.stopLossPrice) + "\n"
+    result += "\tTP: " + str.tostring(e.targetPrice) + "\n"
+    result += "\tRR: " + str.tostring(e.risk_reward_ratio) + "\n"
+    result += "\tState: " + stringify_EntryState(e.state) + "\n"
+    result += "\tSize: " + str.tostring(e.num_shares)
+    result
+
+
+calculate_RR_ratio_based_on_prices(float entry_price, float stop_loss_price, float target_price) =>
+    float distance = entry_price - stop_loss_price 
+    float distance_to_target = target_price - entry_price
+    float RR = distance_to_target / distance
+    RR
+
+calculate_target_based_on_RR_ratio(float entry_price, float stop_loss_price, float RR_ratio) =>
+    float distance = entry_price - stop_loss_price
+    float distance_to_target = distance * RR_ratio 
+    float target = entry_price + distance_to_target
+    target
+
+
+// Creates a new Entry instance with default state
+create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
+    Entry my_entry = Entry.new()
+    my_entry.dir := dir
+    my_entry.orderType := orderType
+    my_entry.entryPrice := entryPrice
+    my_entry.stopLossPrice := stopLossPrice
+    my_entry.targetPrice := targetPrice
+    my_entry.state := EntryState.Placed
+    my_entry.num_shares := 1
+    my_entry.index := index 
+    my_entry.additional_data:= EntryAdditionalData.new()
+    my_entry.additional_data.placed_on_index := index 
+    //calculate RR
+    my_entry.risk_reward_ratio := calculate_RR_ratio_based_on_prices(entryPrice, stopLossPrice, targetPrice)
+    my_entry
+
+create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetRR, int index) =>
+    Entry my_entry = Entry.new()
+    my_entry.dir := dir
+    my_entry.orderType := orderType
+    my_entry.entryPrice := entryPrice
+    my_entry.stopLossPrice := stopLossPrice
+    my_entry.risk_reward_ratio := targetRR
+    my_entry.state := EntryState.Placed
+    my_entry.num_shares := 1
+    my_entry.index := index 
+    my_entry.additional_data:= EntryAdditionalData.new()
+    my_entry.additional_data.placed_on_index := index 
+    //calculate RR
+    my_entry.targetPrice := calculate_target_based_on_RR_ratio(entryPrice,stopLossPrice,targetRR)
+    my_entry
+
+// === TRADE WRAPPER STRUCTURE ===
+
+// keeps track of total profit, and possibly other metrics in the future 
+type TradeDataCollector
+    int num_trades_entered = 0
+    int num_trades_won = 0 
+    int num_trades_lost = 0
+    float total_profit_USD = 0 
+    float total_profit_R = 0
+stringify_TradeDataCollector(TradeDataCollector data) =>
+    string result = ""
+    result += "Trades Entered: " + str.tostring(data.num_trades_entered) + "\n"
+    result += "Trades Won: " + str.tostring(data.num_trades_won) + "\n"
+    result += "Trades Lost: " + str.tostring(data.num_trades_lost) + "\n"
+    result += "Total Profit (USD): " + str.tostring(data.total_profit_USD) + "\n"
+    result += "Total Profit (R): " + str.tostring(data.total_profit_R)
+    result
+
+
+type InstrumentInfo
+    float tick_value_in_USD = 0
+    float USD_made_per_tick = 0
+create_InstrumentInfo() =>
+    InstrumentInfo info = InstrumentInfo.new() 
+    info.tick_value_in_USD := syminfo.mintick
+    info.USD_made_per_tick := (syminfo.pointvalue * syminfo.mintick)
+    info
+stringify_InstrumentInfo(InstrumentInfo info) => 
+    string my_string = "InstrumentInfo: "
+    my_string += "\ttick_value_in_USD = " + str.tostring(info. tick_value_in_USD) + "\n"
+    my_string += "\tUSD_made_per_tick = " + str.tostring(info.USD_made_per_tick)
+    my_string
+
+
+type TradeLibraryArgsParameters
+    bool pyramiding_allowed = false 
+// A container to manage multiple entries (i.e. a portfolio of trades)
+type TradeLibraryArgs
+    TradeLibraryArgsParameters parameters = na 
+    array<Entry> entry_array = na
+    TradeDataCollector data_collector = na
+    InstrumentInfo instrument_info = na
+    bool something_has_changed = false 
+
+// Initializes a new TradeLibraryArgs instance with an empty trade array
+create_TradeLibraryArgs() =>
+    TradeLibraryArgs args = TradeLibraryArgs.new()
+    args.entry_array := array.new<Entry>()
+    args.data_collector := TradeDataCollector.new()
+    args.instrument_info := create_InstrumentInfo()
+    args.parameters := TradeLibraryArgsParameters.new()
+    args
+
+
+is_long_already_open(TradeLibraryArgs args) =>
+    bool already_open = false 
+    if args.entry_array.size() > 0 
+        for i = args.entry_array.size() - 1 to 0 
+            Entry entry = args.entry_array.get(i)
+            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Long)
+                already_open := true 
+                break 
+    already_open 
+
+
+is_short_already_open(TradeLibraryArgs args) =>
+    bool already_open = false 
+    if args.entry_array.size() > 0 
+        for i = args.entry_array.size() - 1 to 0 
+            Entry entry = args.entry_array.get(i)
+            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Short)
+                already_open := true 
+                break 
+    already_open 
+
+// Adds a trade entry to the array
+place_trade(TradeLibraryArgs args, Entry entry) =>
+    bool can_place = true 
+    if args.parameters.pyramiding_allowed == false
+        bool is_long = entry.dir == Direction.Long 
+        bool is_short = entry.dir == Direction.Short 
+        bool already_exists = false 
+        if is_long 
+            already_exists := is_long_already_open(args)
+        else if is_short 
+            already_exists := is_short_already_open(args)
+        if already_exists
+            can_place := false 
+    if can_place 
+        args.entry_array.push(entry)
+    
+
+
+get_entry_win_amount(TradeLibraryArgs args, Entry entry) =>
+    float usd_win_distance = math.abs(entry.entryPrice - entry.targetPrice)
+    int usd_win_distance_ticks = math.round(usd_win_distance / args.instrument_info.tick_value_in_USD)
+    float win_in_USD = (usd_win_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
+    win_in_USD
+
+get_entry_loss_amount(TradeLibraryArgs args, Entry entry) => 
+    float usd_loss_distance = math.abs(entry.entryPrice - entry.stopLossPrice)
+    int usd_loss_distance_ticks = math.round(usd_loss_distance / args.instrument_info.tick_value_in_USD)
+    float loss_in_USD = (usd_loss_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
+    loss_in_USD
+
+// === PER-CANDLE PROCESSING ===
+
+process_trade_entered(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Entered
+    entry.additional_data.entered_on_index := bar_index 
+    args.data_collector.num_trades_entered += 1
+    args.something_has_changed := true 
+
+process_trade_invalidated(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Invalidated
+    entry.additional_data.invalidated_on_index := bar_index
+    args.something_has_changed := true
+
+process_trade_loss(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Loss
+    args.data_collector.total_profit_R -= 1
+    args.data_collector.num_trades_lost += 1
+    entry.additional_data.lost_on_index := bar_index
+    args.something_has_changed := true 
+    args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
+
+process_trade_win(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Success
+    args.data_collector.total_profit_R += entry.risk_reward_ratio
+    args.data_collector.num_trades_won += 1
+    entry.additional_data.won_on_index := bar_index 
+    args.something_has_changed := true    
+    args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
+
+
+// Checks a single candle (high/low) against a single entry and updates its state
+TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
+    //ignore if this is the same index
+    if entry.index != bar_index
+        isLong = entry.dir == Direction.Long
+        isShort = entry.dir == Direction.Short
+        //Todo add worst case assumptions for stop orders vs limit orders
+        crossedEntry = candleLow <= entry.entryPrice and entry.entryPrice <= candleHigh
+        crossedTarget = candleLow < entry.targetPrice and entry.targetPrice < candleHigh
+        completely_passed_target = (isLong and candleLow > entry.targetPrice) or (isShort and candleHigh < entry.targetPrice)
+        touchedStop = (isLong and candleLow <= entry.stopLossPrice) or (isShort and candleHigh >= entry.stopLossPrice)
+        if entry.state == EntryState.Placed
+            if crossedEntry
+                process_trade_entered(args, entry)
+            else if touchedStop
+                process_trade_invalidated(args, entry)
+        if entry.state == EntryState.Entered
+            if touchedStop
+                process_trade_loss(args, entry)
+            else if crossedTarget or completely_passed_target
+                process_trade_win(args, entry)
+
+
+
+ 
+
+
+
+
+// Loops over all trades and processes them using the current candle's high/low
+TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
+    args.something_has_changed := false 
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
+
+// Removes trades that are no longer active (Invalidated, Success, or Loss)
+remove_all_finished_trades(TradeLibraryArgs args) =>
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            bool finished = false
+            if current_entry.state == EntryState.Invalidated
+                finished := true
+            if current_entry.state == EntryState.Loss
+                finished := true
+            if current_entry.state == EntryState.Success
+                finished := true
+            if finished
+                args.entry_array.remove(i)
+
+stringify_all_trades(TradeLibraryArgs args) =>
+    string my_text = na
+    array<Entry> entries = args.entry_array 
+    if entries.size() > 0 
+        my_text := ""
+        for i = entries.size() - 1 to 0 
+            Entry entry = entries.get(i)
+            my_text += stringify_Entry(entry) + "\n"
+    my_text 
+        
+
+
+// === Strategies/FinalStrategy.pine ===
+
+//place a trade based on an entry 
+FinalStrategy_process_entry(Entry entry) =>
+    bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)
+    if should_place_trade
+        string trade_id = str.tostring(entry.index)
+        entry.additional_data.trade_id := trade_id
+        bool is_long = entry.dir == Direction.Long
+        bool is_short = entry.dir == Direction.Short
+        bool is_entry_limit = entry.orderType == OrderType.Limit
+        bool is_entry_stop = entry.orderType == OrderType.Stop
+        if is_entry_limit
+            strategy.entry(id = trade_id, direction = is_long ? strategy.long : strategy.short, limit = entry.entryPrice, qty = entry.num_shares)
+        if is_entry_stop
+            strategy.entry(id = trade_id, direction = is_long ? strategy.long : strategy.short, stop = entry.entryPrice, qty = entry.num_shares)
+        string exit_id = "exit_" + trade_id
+        strategy.exit(id = exit_id, from_entry = trade_id, stop = entry.stopLossPrice, limit = entry.targetPrice)
+
+    bool should_cancel_trade = (entry.state == EntryState.Invalidated)
+    if should_cancel_trade
+        strategy.cancel(id = entry.additional_data.trade_id)
+
+
+
+
+//////////////////////////////////////// TESTING ///////////////////////////////////////////
+
+var EntryLibraryArgs args = create_EntryLibraryArgs()
+// want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
+
+// simple conditions
+var string red_candle_condition_name = "is_red_candle"
+var string green_candle_condition_name = "is_green_candle"
+var string up_candle_condition_name = "is_up_candle"
+var string down_candle_condition_name = "is_down_candle"
+is_current_candle_red() =>
+	close < open
+is_current_candle_green() => 
+	close > open 
+is_candle_up() => 
+	(high > high[1]) and (low > low[1])
+is_candle_down() => 
+	(high < high[1]) and (low < low[1])
+update_simple_condition(args,red_candle_condition_name,is_current_candle_red())
+update_simple_condition(args,green_candle_condition_name, is_current_candle_green())
+update_simple_condition(args, up_candle_condition_name, is_candle_up())
+update_simple_condition(args, down_candle_condition_name, is_candle_down())
+
+var string past_start_time_condition_name = "is_past_start_time"
+is_after_datetime(int year_in, int month_in, int day_in, int hour_in, int minute_in) =>
+    int target_timestamp = timestamp("UTC", year_in, month_in, day_in, hour_in, minute_in)
+    bool is_past = time >= target_timestamp
+    is_past
+update_simple_condition(args,past_start_time_condition_name, is_after_datetime(2025,6,4,0,0))
+
+// compound conditions 
+var string red_up_candle_condition_name = "is_red_up_candle"
+var string green_down_candle_condition_name = "is_green_down_candle"
+var red_up_condition = create_and_add_compound_condition(args, red_up_candle_condition_name, red_candle_condition_name, up_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
+var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BooleanExpressionLibrary.BOOLEAN_OPERATOR.AND)
+
+
+
+// entry actions 
+var entry_action_long_stop_name = "Place Long Stop On Current Candle"
+var entry_action_short_stop_name = "Place Short Stop On Current Candle"
+var EntryAction entry_action_long_stop = create_and_add_EntryAction(args, entry_action_long_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Long, OrderType.Stop)
+var EntryAction entry_action_short_stop = create_and_add_EntryAction(args, entry_action_short_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Short, OrderType.Stop)
+
+// rules 
+var string red_up_rule_name = "Red_Up_Candle_Rule"
+var string green_down_rule_name = "Green_Down_Candle_Rule"
+var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name)
+var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name)
+
+add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
+add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
+
+
+var label my_label = na 
+// if not na(my_label)
+// 	my_label.delete()
+
+args.process_longs := true 
+args.process_shorts := false 
+args.trade_library_args.parameters.pyramiding_allowed := false 
+EntryStrategyLibrary_process_candle(args)
+
+//print out the trades in the trade library 
+bool should_print = args.trade_library_args.something_has_changed or barstate.islast
+string my_text = ""
+if should_print
+    my_text := stringify_all_trades(args.trade_library_args)
+    my_text += "\n\n" + stringify_TradeDataCollector(args.trade_library_args.data_collector)
+    if not na(my_text)
+        my_label := label.new(text = my_text, x = bar_index, y = high)
+
+
+array<Entry> entries = args.trade_library_args.entry_array
+if entries.size() > 0 
+    for i = entries.size() - 1 to 0 
+        process_entry(entries.get(i))
+
+
+
+remove_all_finished_trades(args.trade_library_args)
+
+
+	
+
+
+
+
