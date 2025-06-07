@@ -811,7 +811,7 @@ if should_print
 array<Entry> entries = args.trade_library_args.entry_array
 if entries.size() > 0 
     for i = entries.size() - 1 to 0 
-        process_entry(entries.get(i))
+        FinalStrategy_process_entry(entries.get(i))
 
 
 
