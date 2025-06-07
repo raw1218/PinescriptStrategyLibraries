@@ -1,3 +1,334 @@
+// === Libraries/TradeManagerLibrary.pine ===
+//@version=6
+// === ENUM DEFINITIONS ===
+
+// Direction of the trade
+enum Direction
+    Long    // Buy-side setup
+    Short   // Sell-side setup
+stringify_Direction(Direction dir) =>
+    string result = ""
+    if dir == Direction.Long
+        result := "Long"
+    else if dir == Direction.Short
+        result := "Short"
+    result
+
+
+// Order type (reserved for future use; not used in core logic)
+enum OrderType
+    Limit
+    Stop
+stringify_OrderType(OrderType t) =>
+    string result = ""
+    if t == OrderType.Limit
+        result := "Limit"
+    else if t == OrderType.Stop
+        result := "Stop"
+    result
+
+
+// Current state of a trade
+enum EntryState
+    Placed         // Waiting to be triggered
+    Entered        // Actively in a trade
+    Invalidated    // Stopped before entry (e.g. stop hit first)
+    Success        // Target hit
+    Loss           // Stop loss hit
+stringify_EntryState(EntryState s) =>
+    string result = ""
+    if s == EntryState.Placed
+        result := "Placed"
+    else if s == EntryState.Entered
+        result := "Entered"
+    else if s == EntryState.Invalidated
+        result := "Invalidated"
+    else if s == EntryState.Success
+        result := "Success"
+    else if s == EntryState.Loss
+        result := "Loss"
+    result
+
+
+// === ENTRY STRUCTURE ===
+type EntryAdditionalData
+    int placed_on_index = 0
+    int entered_on_index = 0 
+    int invalidated_on_index = 0 
+    int lost_on_index = 0
+    int won_on_index = 0
+    string trade_id = na //for strategy tester 
+// Represents a single trade
+type Entry
+    Direction dir              // Trade direction
+    OrderType orderType        // Entry type (not currently used in logic)
+    float entryPrice           // Entry level
+    float stopLossPrice        // Stop loss level
+    float targetPrice          // Target level
+    float risk_reward_ratio
+    EntryState state           // Current status of this trade
+    int num_shares             // Optional: share/contract size (default = 1)
+    int index                  // bar index (needed to not process the hitting of the stop loss on the actual entry candle)
+    EntryAdditionalData additional_data
+
+stringify_Entry(Entry e) =>
+    string result = "ENTRY (index = " + str.tostring(e.index) + " )\n"
+    result += "\tDir: " + stringify_Direction(e.dir) + "\n"
+    result += "\tType: " + stringify_OrderType(e.orderType) + "\n"
+    result += "\tEntry: " + str.tostring(e.entryPrice) + "\n"
+    result += "\tSL: " + str.tostring(e.stopLossPrice) + "\n"
+    result += "\tTP: " + str.tostring(e.targetPrice) + "\n"
+    result += "\tRR: " + str.tostring(e.risk_reward_ratio) + "\n"
+    result += "\tState: " + stringify_EntryState(e.state) + "\n"
+    result += "\tSize: " + str.tostring(e.num_shares)
+    result
+
+
+calculate_RR_ratio_based_on_prices(float entry_price, float stop_loss_price, float target_price) =>
+    float distance = entry_price - stop_loss_price 
+    float distance_to_target = target_price - entry_price
+    float RR = distance_to_target / distance
+    RR
+
+calculate_target_based_on_RR_ratio(float entry_price, float stop_loss_price, float RR_ratio) =>
+    float distance = entry_price - stop_loss_price
+    float distance_to_target = distance * RR_ratio 
+    float target = entry_price + distance_to_target
+    target
+
+
+// Creates a new Entry instance with default state
+create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
+    Entry my_entry = Entry.new()
+    my_entry.dir := dir
+    my_entry.orderType := orderType
+    my_entry.entryPrice := entryPrice
+    my_entry.stopLossPrice := stopLossPrice
+    my_entry.targetPrice := targetPrice
+    my_entry.state := EntryState.Placed
+    my_entry.num_shares := 1
+    my_entry.index := index 
+    my_entry.additional_data:= EntryAdditionalData.new()
+    my_entry.additional_data.placed_on_index := index 
+    //calculate RR
+    my_entry.risk_reward_ratio := calculate_RR_ratio_based_on_prices(entryPrice, stopLossPrice, targetPrice)
+    my_entry
+
+create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetRR, int index) =>
+    Entry my_entry = Entry.new()
+    my_entry.dir := dir
+    my_entry.orderType := orderType
+    my_entry.entryPrice := entryPrice
+    my_entry.stopLossPrice := stopLossPrice
+    my_entry.risk_reward_ratio := targetRR
+    my_entry.state := EntryState.Placed
+    my_entry.num_shares := 1
+    my_entry.index := index 
+    my_entry.additional_data:= EntryAdditionalData.new()
+    my_entry.additional_data.placed_on_index := index 
+    //calculate RR
+    my_entry.targetPrice := calculate_target_based_on_RR_ratio(entryPrice,stopLossPrice,targetRR)
+    my_entry
+
+// === TRADE WRAPPER STRUCTURE ===
+
+// keeps track of total profit, and possibly other metrics in the future 
+type TradeDataCollector
+    int num_trades_entered = 0
+    int num_trades_won = 0 
+    int num_trades_lost = 0
+    float total_profit_USD = 0 
+    float total_profit_R = 0
+stringify_TradeDataCollector(TradeDataCollector data) =>
+    string result = ""
+    result += "Trades Entered: " + str.tostring(data.num_trades_entered) + "\n"
+    result += "Trades Won: " + str.tostring(data.num_trades_won) + "\n"
+    result += "Trades Lost: " + str.tostring(data.num_trades_lost) + "\n"
+    result += "Total Profit (USD): " + str.tostring(data.total_profit_USD) + "\n"
+    result += "Total Profit (R): " + str.tostring(data.total_profit_R)
+    result
+
+
+type InstrumentInfo
+    float tick_value_in_USD = 0
+    float USD_made_per_tick = 0
+create_InstrumentInfo() =>
+    InstrumentInfo info = InstrumentInfo.new() 
+    info.tick_value_in_USD := syminfo.mintick
+    info.USD_made_per_tick := (syminfo.pointvalue * syminfo.mintick)
+    info
+stringify_InstrumentInfo(InstrumentInfo info) => 
+    string my_string = "InstrumentInfo: "
+    my_string += "\ttick_value_in_USD = " + str.tostring(info. tick_value_in_USD) + "\n"
+    my_string += "\tUSD_made_per_tick = " + str.tostring(info.USD_made_per_tick)
+    my_string
+
+
+type TradeLibraryArgsParameters
+    bool pyramiding_allowed = false 
+// A container to manage multiple entries (i.e. a portfolio of trades)
+type TradeLibraryArgs
+    TradeLibraryArgsParameters parameters = na 
+    array<Entry> entry_array = na
+    TradeDataCollector data_collector = na
+    InstrumentInfo instrument_info = na
+    bool something_has_changed = false 
+
+// Initializes a new TradeLibraryArgs instance with an empty trade array
+create_TradeLibraryArgs() =>
+    TradeLibraryArgs args = TradeLibraryArgs.new()
+    args.entry_array := array.new<Entry>()
+    args.data_collector := TradeDataCollector.new()
+    args.instrument_info := create_InstrumentInfo()
+    args.parameters := TradeLibraryArgsParameters.new()
+    args
+
+
+is_long_already_open(TradeLibraryArgs args) =>
+    bool already_open = false 
+    if args.entry_array.size() > 0 
+        for i = args.entry_array.size() - 1 to 0 
+            Entry entry = args.entry_array.get(i)
+            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Long)
+                already_open := true 
+                break 
+    already_open 
+
+
+is_short_already_open(TradeLibraryArgs args) =>
+    bool already_open = false 
+    if args.entry_array.size() > 0 
+        for i = args.entry_array.size() - 1 to 0 
+            Entry entry = args.entry_array.get(i)
+            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Short)
+                already_open := true 
+                break 
+    already_open 
+
+// Adds a trade entry to the array
+place_trade(TradeLibraryArgs args, Entry entry) =>
+    bool can_place = true 
+    if args.parameters.pyramiding_allowed == false
+        bool is_long = entry.dir == Direction.Long 
+        bool is_short = entry.dir == Direction.Short 
+        bool already_exists = false 
+        if is_long 
+            already_exists := is_long_already_open(args)
+        else if is_short 
+            already_exists := is_short_already_open(args)
+        if already_exists
+            can_place := false 
+    if can_place 
+        args.entry_array.push(entry)
+    
+
+
+get_entry_win_amount(TradeLibraryArgs args, Entry entry) =>
+    float usd_win_distance = math.abs(entry.entryPrice - entry.targetPrice)
+    int usd_win_distance_ticks = math.round(usd_win_distance / args.instrument_info.tick_value_in_USD)
+    float win_in_USD = (usd_win_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
+    win_in_USD
+
+get_entry_loss_amount(TradeLibraryArgs args, Entry entry) => 
+    float usd_loss_distance = math.abs(entry.entryPrice - entry.stopLossPrice)
+    int usd_loss_distance_ticks = math.round(usd_loss_distance / args.instrument_info.tick_value_in_USD)
+    float loss_in_USD = (usd_loss_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
+    loss_in_USD
+
+// === PER-CANDLE PROCESSING ===
+
+process_trade_entered(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Entered
+    entry.additional_data.entered_on_index := bar_index 
+    args.data_collector.num_trades_entered += 1
+    args.something_has_changed := true 
+
+process_trade_invalidated(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Invalidated
+    entry.additional_data.invalidated_on_index := bar_index
+    args.something_has_changed := true
+
+process_trade_loss(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Loss
+    args.data_collector.total_profit_R -= 1
+    args.data_collector.num_trades_lost += 1
+    entry.additional_data.lost_on_index := bar_index
+    args.something_has_changed := true 
+    args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
+
+process_trade_win(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Success
+    args.data_collector.total_profit_R += entry.risk_reward_ratio
+    args.data_collector.num_trades_won += 1
+    entry.additional_data.won_on_index := bar_index 
+    args.something_has_changed := true    
+    args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
+
+
+// Checks a single candle (high/low) against a single entry and updates its state
+TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
+    //ignore if this is the same index
+    if entry.index != bar_index
+        isLong = entry.dir == Direction.Long
+        isShort = entry.dir == Direction.Short
+        //Todo add worst case assumptions for stop orders vs limit orders
+        crossedEntry = candleLow <= entry.entryPrice and entry.entryPrice <= candleHigh
+        crossedTarget = candleLow < entry.targetPrice and entry.targetPrice < candleHigh
+        completely_passed_target = (isLong and candleLow > entry.targetPrice) or (isShort and candleHigh < entry.targetPrice)
+        touchedStop = (isLong and candleLow <= entry.stopLossPrice) or (isShort and candleHigh >= entry.stopLossPrice)
+        if entry.state == EntryState.Placed
+            if crossedEntry
+                process_trade_entered(args, entry)
+            else if touchedStop
+                process_trade_invalidated(args, entry)
+        if entry.state == EntryState.Entered
+            if touchedStop
+                process_trade_loss(args, entry)
+            else if crossedTarget or completely_passed_target
+                process_trade_win(args, entry)
+
+
+
+ 
+
+
+
+
+// Loops over all trades and processes them using the current candle's high/low
+TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
+    args.something_has_changed := false 
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
+
+// Removes trades that are no longer active (Invalidated, Success, or Loss)
+remove_all_finished_trades(TradeLibraryArgs args) =>
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            bool finished = false
+            if current_entry.state == EntryState.Invalidated
+                finished := true
+            if current_entry.state == EntryState.Loss
+                finished := true
+            if current_entry.state == EntryState.Success
+                finished := true
+            if finished
+                args.entry_array.remove(i)
+
+stringify_all_trades(TradeLibraryArgs args) =>
+    string my_text = na
+    array<Entry> entries = args.entry_array 
+    if entries.size() > 0 
+        my_text := ""
+        for i = entries.size() - 1 to 0 
+            Entry entry = entries.get(i)
+            my_text += stringify_Entry(entry) + "\n"
+    my_text 
+        
+
+
 // === Libraries/BooleanExpressionLibrary.pine ===
 //@version=6
 // === ENUMS ===
@@ -375,337 +706,6 @@ EntryStrategyLibrary_process_candle(EntryLibraryArgs args) =>
 	TradeManagerLibrary_process_candle(args.trade_library_args)
 	
 
-
-
-// === Libraries/TradeManagerLibrary.pine ===
-//@version=6
-// === ENUM DEFINITIONS ===
-
-// Direction of the trade
-enum Direction
-    Long    // Buy-side setup
-    Short   // Sell-side setup
-stringify_Direction(Direction dir) =>
-    string result = ""
-    if dir == Direction.Long
-        result := "Long"
-    else if dir == Direction.Short
-        result := "Short"
-    result
-
-
-// Order type (reserved for future use; not used in core logic)
-enum OrderType
-    Limit
-    Stop
-stringify_OrderType(OrderType t) =>
-    string result = ""
-    if t == OrderType.Limit
-        result := "Limit"
-    else if t == OrderType.Stop
-        result := "Stop"
-    result
-
-
-// Current state of a trade
-enum EntryState
-    Placed         // Waiting to be triggered
-    Entered        // Actively in a trade
-    Invalidated    // Stopped before entry (e.g. stop hit first)
-    Success        // Target hit
-    Loss           // Stop loss hit
-stringify_EntryState(EntryState s) =>
-    string result = ""
-    if s == EntryState.Placed
-        result := "Placed"
-    else if s == EntryState.Entered
-        result := "Entered"
-    else if s == EntryState.Invalidated
-        result := "Invalidated"
-    else if s == EntryState.Success
-        result := "Success"
-    else if s == EntryState.Loss
-        result := "Loss"
-    result
-
-
-// === ENTRY STRUCTURE ===
-type EntryAdditionalData
-    int placed_on_index = 0
-    int entered_on_index = 0 
-    int invalidated_on_index = 0 
-    int lost_on_index = 0
-    int won_on_index = 0
-    string trade_id = na //for strategy tester 
-// Represents a single trade
-type Entry
-    Direction dir              // Trade direction
-    OrderType orderType        // Entry type (not currently used in logic)
-    float entryPrice           // Entry level
-    float stopLossPrice        // Stop loss level
-    float targetPrice          // Target level
-    float risk_reward_ratio
-    EntryState state           // Current status of this trade
-    int num_shares             // Optional: share/contract size (default = 1)
-    int index                  // bar index (needed to not process the hitting of the stop loss on the actual entry candle)
-    EntryAdditionalData additional_data
-
-stringify_Entry(Entry e) =>
-    string result = "ENTRY (index = " + str.tostring(e.index) + " )\n"
-    result += "\tDir: " + stringify_Direction(e.dir) + "\n"
-    result += "\tType: " + stringify_OrderType(e.orderType) + "\n"
-    result += "\tEntry: " + str.tostring(e.entryPrice) + "\n"
-    result += "\tSL: " + str.tostring(e.stopLossPrice) + "\n"
-    result += "\tTP: " + str.tostring(e.targetPrice) + "\n"
-    result += "\tRR: " + str.tostring(e.risk_reward_ratio) + "\n"
-    result += "\tState: " + stringify_EntryState(e.state) + "\n"
-    result += "\tSize: " + str.tostring(e.num_shares)
-    result
-
-
-calculate_RR_ratio_based_on_prices(float entry_price, float stop_loss_price, float target_price) =>
-    float distance = entry_price - stop_loss_price 
-    float distance_to_target = target_price - entry_price
-    float RR = distance_to_target / distance
-    RR
-
-calculate_target_based_on_RR_ratio(float entry_price, float stop_loss_price, float RR_ratio) =>
-    float distance = entry_price - stop_loss_price
-    float distance_to_target = distance * RR_ratio 
-    float target = entry_price + distance_to_target
-    target
-
-
-// Creates a new Entry instance with default state
-create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
-    Entry my_entry = Entry.new()
-    my_entry.dir := dir
-    my_entry.orderType := orderType
-    my_entry.entryPrice := entryPrice
-    my_entry.stopLossPrice := stopLossPrice
-    my_entry.targetPrice := targetPrice
-    my_entry.state := EntryState.Placed
-    my_entry.num_shares := 1
-    my_entry.index := index 
-    my_entry.additional_data:= EntryAdditionalData.new()
-    my_entry.additional_data.placed_on_index := index 
-    //calculate RR
-    my_entry.risk_reward_ratio := calculate_RR_ratio_based_on_prices(entryPrice, stopLossPrice, targetPrice)
-    my_entry
-
-create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetRR, int index) =>
-    Entry my_entry = Entry.new()
-    my_entry.dir := dir
-    my_entry.orderType := orderType
-    my_entry.entryPrice := entryPrice
-    my_entry.stopLossPrice := stopLossPrice
-    my_entry.risk_reward_ratio := targetRR
-    my_entry.state := EntryState.Placed
-    my_entry.num_shares := 1
-    my_entry.index := index 
-    my_entry.additional_data:= EntryAdditionalData.new()
-    my_entry.additional_data.placed_on_index := index 
-    //calculate RR
-    my_entry.targetPrice := calculate_target_based_on_RR_ratio(entryPrice,stopLossPrice,targetRR)
-    my_entry
-
-// === TRADE WRAPPER STRUCTURE ===
-
-// keeps track of total profit, and possibly other metrics in the future 
-type TradeDataCollector
-    int num_trades_entered = 0
-    int num_trades_won = 0 
-    int num_trades_lost = 0
-    float total_profit_USD = 0 
-    float total_profit_R = 0
-stringify_TradeDataCollector(TradeDataCollector data) =>
-    string result = ""
-    result += "Trades Entered: " + str.tostring(data.num_trades_entered) + "\n"
-    result += "Trades Won: " + str.tostring(data.num_trades_won) + "\n"
-    result += "Trades Lost: " + str.tostring(data.num_trades_lost) + "\n"
-    result += "Total Profit (USD): " + str.tostring(data.total_profit_USD) + "\n"
-    result += "Total Profit (R): " + str.tostring(data.total_profit_R)
-    result
-
-
-type InstrumentInfo
-    float tick_value_in_USD = 0
-    float USD_made_per_tick = 0
-create_InstrumentInfo() =>
-    InstrumentInfo info = InstrumentInfo.new() 
-    info.tick_value_in_USD := syminfo.mintick
-    info.USD_made_per_tick := (syminfo.pointvalue * syminfo.mintick)
-    info
-stringify_InstrumentInfo(InstrumentInfo info) => 
-    string my_string = "InstrumentInfo: "
-    my_string += "\ttick_value_in_USD = " + str.tostring(info. tick_value_in_USD) + "\n"
-    my_string += "\tUSD_made_per_tick = " + str.tostring(info.USD_made_per_tick)
-    my_string
-
-
-type TradeLibraryArgsParameters
-    bool pyramiding_allowed = false 
-// A container to manage multiple entries (i.e. a portfolio of trades)
-type TradeLibraryArgs
-    TradeLibraryArgsParameters parameters = na 
-    array<Entry> entry_array = na
-    TradeDataCollector data_collector = na
-    InstrumentInfo instrument_info = na
-    bool something_has_changed = false 
-
-// Initializes a new TradeLibraryArgs instance with an empty trade array
-create_TradeLibraryArgs() =>
-    TradeLibraryArgs args = TradeLibraryArgs.new()
-    args.entry_array := array.new<Entry>()
-    args.data_collector := TradeDataCollector.new()
-    args.instrument_info := create_InstrumentInfo()
-    args.parameters := TradeLibraryArgsParameters.new()
-    args
-
-
-is_long_already_open(TradeLibraryArgs args) =>
-    bool already_open = false 
-    if args.entry_array.size() > 0 
-        for i = args.entry_array.size() - 1 to 0 
-            Entry entry = args.entry_array.get(i)
-            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Long)
-                already_open := true 
-                break 
-    already_open 
-
-
-is_short_already_open(TradeLibraryArgs args) =>
-    bool already_open = false 
-    if args.entry_array.size() > 0 
-        for i = args.entry_array.size() - 1 to 0 
-            Entry entry = args.entry_array.get(i)
-            if (entry.state == EntryState.Entered) and (entry.dir == Direction.Short)
-                already_open := true 
-                break 
-    already_open 
-
-// Adds a trade entry to the array
-place_trade(TradeLibraryArgs args, Entry entry) =>
-    bool can_place = true 
-    if args.parameters.pyramiding_allowed == false
-        bool is_long = entry.dir == Direction.Long 
-        bool is_short = entry.dir == Direction.Short 
-        bool already_exists = false 
-        if is_long 
-            already_exists := is_long_already_open(args)
-        else if is_short 
-            already_exists := is_short_already_open(args)
-        if already_exists
-            can_place := false 
-    if can_place 
-        args.entry_array.push(entry)
-    
-
-
-get_entry_win_amount(TradeLibraryArgs args, Entry entry) =>
-    float usd_win_distance = math.abs(entry.entryPrice - entry.targetPrice)
-    int usd_win_distance_ticks = math.round(usd_win_distance / args.instrument_info.tick_value_in_USD)
-    float win_in_USD = (usd_win_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
-    win_in_USD
-
-get_entry_loss_amount(TradeLibraryArgs args, Entry entry) => 
-    float usd_loss_distance = math.abs(entry.entryPrice - entry.stopLossPrice)
-    int usd_loss_distance_ticks = math.round(usd_loss_distance / args.instrument_info.tick_value_in_USD)
-    float loss_in_USD = (usd_loss_distance_ticks * args.instrument_info.USD_made_per_tick) * entry.num_shares
-    loss_in_USD
-
-// === PER-CANDLE PROCESSING ===
-
-process_trade_entered(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Entered
-    entry.additional_data.entered_on_index := bar_index 
-    args.data_collector.num_trades_entered += 1
-    args.something_has_changed := true 
-
-process_trade_invalidated(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Invalidated
-    entry.additional_data.invalidated_on_index := bar_index
-    args.something_has_changed := true
-
-process_trade_loss(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Loss
-    args.data_collector.total_profit_R -= 1
-    args.data_collector.num_trades_lost += 1
-    entry.additional_data.lost_on_index := bar_index
-    args.something_has_changed := true 
-    args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
-
-process_trade_win(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Success
-    args.data_collector.total_profit_R += entry.risk_reward_ratio
-    args.data_collector.num_trades_won += 1
-    entry.additional_data.won_on_index := bar_index 
-    args.something_has_changed := true    
-    args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
-
-
-// Checks a single candle (high/low) against a single entry and updates its state
-TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
-    //ignore if this is the same index
-    if entry.index != bar_index
-        isLong = entry.dir == Direction.Long
-        isShort = entry.dir == Direction.Short
-        //Todo add worst case assumptions for stop orders vs limit orders
-        crossedEntry = candleLow <= entry.entryPrice and entry.entryPrice <= candleHigh
-        crossedTarget = candleLow < entry.targetPrice and entry.targetPrice < candleHigh
-        completely_passed_target = (isLong and candleLow > entry.targetPrice) or (isShort and candleHigh < entry.targetPrice)
-        touchedStop = (isLong and candleLow <= entry.stopLossPrice) or (isShort and candleHigh >= entry.stopLossPrice)
-        if entry.state == EntryState.Placed
-            if crossedEntry
-                process_trade_entered(args, entry)
-            else if touchedStop
-                process_trade_invalidated(args, entry)
-        if entry.state == EntryState.Entered
-            if touchedStop
-                process_trade_loss(args, entry)
-            else if crossedTarget or completely_passed_target
-                process_trade_win(args, entry)
-
-
-
- 
-
-
-
-
-// Loops over all trades and processes them using the current candle's high/low
-TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
-    args.something_has_changed := false 
-    if args.entry_array.size() > 0
-        for i = args.entry_array.size() - 1 to 0
-            Entry current_entry = args.entry_array.get(i)
-            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
-
-// Removes trades that are no longer active (Invalidated, Success, or Loss)
-remove_all_finished_trades(TradeLibraryArgs args) =>
-    if args.entry_array.size() > 0
-        for i = args.entry_array.size() - 1 to 0
-            Entry current_entry = args.entry_array.get(i)
-            bool finished = false
-            if current_entry.state == EntryState.Invalidated
-                finished := true
-            if current_entry.state == EntryState.Loss
-                finished := true
-            if current_entry.state == EntryState.Success
-                finished := true
-            if finished
-                args.entry_array.remove(i)
-
-stringify_all_trades(TradeLibraryArgs args) =>
-    string my_text = na
-    array<Entry> entries = args.entry_array 
-    if entries.size() > 0 
-        my_text := ""
-        for i = entries.size() - 1 to 0 
-            Entry entry = entries.get(i)
-            my_text += stringify_Entry(entry) + "\n"
-    my_text 
-        
 
 
 // === Strategies/FinalStrategy.pine ===
