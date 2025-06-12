@@ -68,11 +68,19 @@ var entry_action_short_stop_name = "Place Short Stop On Current Candle"
 var EntryAction entry_action_long_stop = create_and_add_EntryAction(args, entry_action_long_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Long, OrderType.Stop)
 var EntryAction entry_action_short_stop = create_and_add_EntryAction(args, entry_action_short_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Short, OrderType.Stop)
 
+// exit actions 
+var exit_action_1R_name = "Exit at 1R"
+var ExitAction exit_action_1R = create_and_add_ExitAction(args, exit_action_1R_name, EXIT_ACTION_TYPE.SetRiskRewardRatio, 1)
+
+var exit_action_nearest_key_level_name = "Exit at nearest key level"
+var ExitAction exit_action_nearest_key_level = create_and_add_ExitAction(args, exit_action_nearest_key_level_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+
+
 // rules 
 var string red_up_rule_name = "Red_Up_Candle_Rule"
 var string green_down_rule_name = "Green_Down_Candle_Rule"
-var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name)
-var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name)
+var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_1R_name)
+var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_1R_name)
 
 add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)

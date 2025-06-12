@@ -56,4 +56,46 @@ KeyLevelLibrary_isPriceTouchingKeyLevel(KeyLevelLibraryArgs args, string name) =
     result
 
 
+//returns 0 if touching, positive if level is above price, negative if level below price
+helper_getDistanceToKeyLevel(KeyLevel level) =>
+    float distance = 0
+    if helper_isPriceTouchingKeyLevel(level)
+        distance := 0 
+    else
+        bool level_is_above_price = high < level.current_value
+        bool level_is_below_price = not level_is_above_price
+        if level_is_above_price 
+            distance := level.current_value - high //should be positive
+        else if level_is_below_price 
+            distance := level.current_value - low //should be negative
+    distance 
+
+//returns 0 if touching (na if invalid level name), positive if level is above price, negative if level is below price 
+KeyLevelLibrary_getDistanceToKeyLevel(KeyLevelLibraryArgs args, string name) =>
+    float result = na
+    KeyLevel level = get_KeyLeveL_from_name(name)
+    if not na(level)
+        result := helper_getDistanceToKeyLevel(level)
+    result 
+
+
+KeyLevelLibrary_getDistanceToNearestKeyLevel(KeyLevelLibraryArgs args, string name, bool ignore_levels_currently_touching) =>
+    float result = na 
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_level = args.key_levels.get(i)
+            float current_distance = helper_getDistanceToKeyLevel(current_level)
+            if na(result)
+                result := current_distance 
+            else
+                if ignore_levels_currently_touching
+                    continue 
+                else if math.abs(current_distance) < math.abs(result) 
+                    result := current_distance 
+    current_distance 
+    
+
+        
+
+
 
