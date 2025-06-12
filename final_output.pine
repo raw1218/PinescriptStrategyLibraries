@@ -513,7 +513,7 @@ helper_getDistanceToKeyLevel(KeyLevel level) =>
 //returns 0 if touching (na if invalid level name), positive if level is above price, negative if level is below price 
 KeyLevelLibrary_getDistanceToKeyLevel(KeyLevelLibraryArgs args, string name) =>
     float result = na
-    KeyLevel level = get_KeyLeveL_from_name(name)
+    KeyLevel level = get_KeyLeveL_from_name(args, name)
     if not na(level)
         result := helper_getDistanceToKeyLevel(level)
     result 
@@ -532,7 +532,7 @@ KeyLevelLibrary_getDistanceToNearestKeyLevel(KeyLevelLibraryArgs args, string na
                     continue 
                 else if math.abs(current_distance) < math.abs(result) 
                     result := current_distance 
-    current_distance 
+    result
     
 
         
@@ -571,7 +571,7 @@ enum ENTRY_ACTION_TYPE
 	EntryIsCandle //the entry is at one end of the candle with the stoploss at the other end
 type EntryAction 
 	string name = na 
-	ENTRY_ACTION_TYPE type = na 
+	ENTRY_ACTION_TYPE entry_type = na 
 	Direction trade_direction = na 
 	OrderType order_type = na 
 
@@ -580,7 +580,7 @@ enum EXIT_ACTION_TYPE
 	SetTargetPrice
 type ExitAction 
 	string name = na 
-	EXIT_ACTION_TYPE = na 
+	EXIT_ACTION_TYPE exit_type = na 
 	float rr_or_target_value = na 
 
 
@@ -742,7 +742,7 @@ create_trade_from_EntryAction_and_ExitAction(EntryAction entry_action, ExitActio
 	float stop_loss_price = 0
 	float target_price = 0
 	//handle entry action 
-	if entry_action.type == ENTRY_ACTION_TYPE.EntryIsCandle
+	if entry_action.entry_type == ENTRY_ACTION_TYPE.EntryIsCandle
 		if is_long 
 			entry_price := high 
 			stop_loss_price := low 
@@ -751,10 +751,10 @@ create_trade_from_EntryAction_and_ExitAction(EntryAction entry_action, ExitActio
 			stop_loss_price := high 
 
 	//process exit action 
-	if exit_action.type == EXIT_ACTION_TYPE.SetRiskRewardRatio
+	if exit_action.exit_type == EXIT_ACTION_TYPE.SetRiskRewardRatio
 		float rr = exit_action.rr_or_target_value
 		entry := create_Entry_with_target_RR(entry_action.trade_direction, entry_action.order_type, entry_price, stop_loss_price, rr, candle_index)
-	else if exit_action.type == EXIT_ACTION_TYPE.SetTargetPrice
+	else if exit_action.exit_type == EXIT_ACTION_TYPE.SetTargetPrice
 		float target = exit_action.rr_or_target_value
 		entry := create_Entry_with_target_price(entry_action.trade_direction, entry_action.order_type, entry_price, stop_loss_price, target, candle_index)
 
@@ -766,7 +766,7 @@ take_active_trades(EntryLibraryArgs args) =>
 		for i = active_actions.size() - 1 to 0 
 			EntryAction current_entry_action = active_actions.get(i).entry_action
 			ExitAction current_exit_action = active_actions.get(i).exit_action
-			Entry entry = create_trade_from_EntryAction(current_entry_action, current_exit_action, bar_index)
+			Entry entry = create_trade_from_EntryAction_and_ExitAction(current_entry_action, current_exit_action, bar_index)
 			place_trade(args.trade_library_args, entry)
 
 
@@ -827,8 +827,8 @@ process_EntryRules(EntryLibraryArgs args) =>
 			
 			if all_conditions_met
 				//process if we are allowed to take longs and/or shorts 
-				bool is_long = current_rule.action.trade_direction == Direction.Long
-				bool is_short = current_rule.action.trade_direction == Direction.Short
+				bool is_long = current_rule.entry_action.trade_direction == Direction.Long
+				bool is_short = current_rule.entry_action.trade_direction == Direction.Short
 				if (is_long and args.process_longs) or (is_short and args.process_shorts)
 					args.output.taken_actions.push(current_rule)
 					args.output.has_output := true
