@@ -1,3 +1,17 @@
+// === Libraries/MiscLibrary.pine ===
+MiscLibrary_isMakingAtLeast_R_toPrice(float entry_price, float stop_loss_price, float target_price, float target_R) =>
+    distance_to_stop = entry_price - stop_loss_price
+    distance_to_target = target_price - entry_price
+    float rr = distance_to_target / distance_to_stop
+    rr >= target_R 
+
+MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, float target_price, float target_R) =>
+    distance_to_stop = entry_price - stop_loss_price
+    distance_to_target = target_price - entry_price
+    float rr = distance_to_target / distance_to_stop
+    rr <= target_R 
+
+
 // === Libraries/TradeManagerLibrary.pine ===
 //@version=6
 // === ENUM DEFINITIONS ===
@@ -497,7 +511,7 @@ KeyLevelLibrary_isPriceTouchingKeyLevel(KeyLevelLibraryArgs args, string name) =
 
 
 //returns 0 if touching, positive if level is above price, negative if level below price
-helper_getDistanceToKeyLevel(KeyLevel level) =>
+KeyLevelLibrary_getDistanceToKeyLevel(KeyLevel level) =>
     float distance = 0
     if helper_isPriceTouchingKeyLevel(level)
         distance := 0 
@@ -511,34 +525,76 @@ helper_getDistanceToKeyLevel(KeyLevel level) =>
     distance 
 
 //returns 0 if touching (na if invalid level name), positive if level is above price, negative if level is below price 
-KeyLevelLibrary_getDistanceToKeyLevel(KeyLevelLibraryArgs args, string name) =>
+KeyLevelLibrary_getDistanceToKeyLevelByName(KeyLevelLibraryArgs args, string name) =>
     float result = na
     KeyLevel level = get_KeyLeveL_from_name(args, name)
     if not na(level)
-        result := helper_getDistanceToKeyLevel(level)
+        result := KeyLevelLibrary_getDistanceToKeyLevel(level)
     result 
 
 
-KeyLevelLibrary_getDistanceToNearestKeyLevel(KeyLevelLibraryArgs args, string name, bool ignore_levels_currently_touching) =>
-    float result = na 
+
+KeyLevelLibrary_getNearestKeyLevel(KeyLevelLibraryArgs args, bool ignore_levels_currently_touching) =>
+    KeyLevel result = na
+    float closest_distance = na
     if args.key_levels.size() > 0 
         for i = args.key_levels.size() - 1 to 0 
             KeyLevel current_level = args.key_levels.get(i)
-            float current_distance = helper_getDistanceToKeyLevel(current_level)
-            if na(result)
-                result := current_distance 
+            float current_distance = KeyLevelLibrary_getDistanceToKeyLevel(current_level)
+            if na(closest_distance)
+                closest_distance := current_distance 
+                result := current_level
             else
-                if ignore_levels_currently_touching
+                if ignore_levels_currently_touching and (current_distance == 0)
                     continue 
                 else if math.abs(current_distance) < math.abs(result) 
-                    result := current_distance 
+                    closest_distance := current_distance
+                    result := current_level 
     result
-    
-
         
 
+KeyLevelLibrary_getNearestKeyLevelLong(KeyLevelLibraryArgs args, bool ignore_levels_currently_touching) =>
+    KeyLevel result = na
+    float closest_distance = na
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_level = args.key_levels.get(i)
+            float current_distance = KeyLevelLibrary_getDistanceToKeyLevel(current_level)
+            if current_distance >= 0
+                if na(closest_distance)
+                    closest_distance := current_distance 
+                    result := current_level
+                else
+                    if ignore_levels_currently_touching and (current_distance == 0)
+                        continue 
+                    else if math.abs(current_distance) < math.abs(result) 
+                        closest_distance := current_distance
+                        result := current_level 
+    result
 
 
+KeyLevelLibrary_getNearestKeyLevelShort(KeyLevelLibraryArgs args, bool ignore_levels_currently_touching) =>
+    KeyLevel result = na
+    float closest_distance = na
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_level = args.key_levels.get(i)
+            float current_distance = KeyLevelLibrary_getDistanceToKeyLevel(current_level)
+            if current_distance <= 0
+                if na(closest_distance)
+                    closest_distance := current_distance 
+                    result := current_level
+                else
+                    if ignore_levels_currently_touching and (current_distance == 0)
+                        continue 
+                    else if math.abs(current_distance) < math.abs(result) 
+                        closest_distance := current_distance
+                        result := current_level 
+    result
+
+
+
+KeyLevelLibrary_isMakingAtLeast_R_toKeyLevel
 
 
 // === Libraries/EntryStrategyLibrary.pine ===
@@ -886,7 +942,7 @@ FinalStrategy_process_entry(Entry entry) =>
 var EntryLibraryArgs args = create_EntryLibraryArgs()
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
 
-// simple conditions
+// simple conditions,  red up candle and green down candle 
 var string red_candle_condition_name = "is_red_candle"
 var string green_candle_condition_name = "is_green_candle"
 var string up_candle_condition_name = "is_up_candle"
@@ -918,30 +974,11 @@ var red_up_condition = create_and_add_compound_condition(args, red_up_candle_con
 var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BOOLEAN_OPERATOR.AND)
 
 
-
 // entry actions 
 var entry_action_long_stop_name = "Place Long Stop On Current Candle"
 var entry_action_short_stop_name = "Place Short Stop On Current Candle"
 var EntryAction entry_action_long_stop = create_and_add_EntryAction(args, entry_action_long_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Long, OrderType.Stop)
 var EntryAction entry_action_short_stop = create_and_add_EntryAction(args, entry_action_short_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Short, OrderType.Stop)
-
-// exit actions 
-var exit_action_1R_name = "Exit at 1R"
-var ExitAction exit_action_1R = create_and_add_ExitAction(args, exit_action_1R_name, EXIT_ACTION_TYPE.SetRiskRewardRatio, 1)
-
-var exit_action_nearest_key_level_name = "Exit at nearest key level"
-var ExitAction exit_action_nearest_key_level = create_and_add_ExitAction(args, exit_action_nearest_key_level_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
-
-
-// rules 
-var string red_up_rule_name = "Red_Up_Candle_Rule"
-var string green_down_rule_name = "Green_Down_Candle_Rule"
-var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_1R_name)
-var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_1R_name)
-
-add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
-add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
-
 
 //key levels 
 KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma20", ta.sma(close, 20))
@@ -951,8 +988,57 @@ KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma200", ta.sma(clo
 
 var string touching_sma_condition_name = "TouchingSMA_20_50_100_200"
 update_simple_condition(args,touching_sma_condition_name, KeyLevelLibrary_isPriceTouchingAnyKeyLevel(args.key_level_library_args))
+
+var string near_sma_condition_long_name = "NearSMA_20_50_100_200 LONG"
+KeyLevel nearest_key_level_long = KeyLevelLibrary_getNearestKeyLevelLong(args.key_level_library_args)
+bool is_near_sma_long_helper = MiscLibrary_isMakingAtMost_R_toPrice(high, low, nearest_key_level_long.current_value)
+update_simple_condition(args, near_sma_condition_long_name, is_near_sma_long_helper)
+update_exit_action_value(args, exit_action_nearest_key_level_long_name, nearest_key_level_long.current_value)
+
+var string near_sma_condition_short_name = "NearSMA_20_50_100_200 SHORT"
+KeyLevel nearest_key_level_short = KeyLevelLibrary_getNearestKeyLevelShort(args.key_level_library_args)
+bool is_near_sma_short_helper = MiscLibrary_isMakingAtMost_R_toPrice(low, high, nearest_key_level_short.current_value)
+update_simple_condition(args, near_sma_condition_short_name, is_near_sma_long_helper)
+update_exit_action_value(args, exit_action_nearest_key_level_short_name, nearest_key_level_short.current_value)
+
+
+// Rules Taking Entries touching Key Levels For 1R
+var exit_action_1R_name = "Exit at 1R"
+var ExitAction exit_action_1R = create_and_add_ExitAction(args, exit_action_1R_name, EXIT_ACTION_TYPE.SetRiskRewardRatio, 1)
+
+var string red_up_1r_rule_name = "Red_Up_Candle_Touching_Key_Level_1R_Rule"
+var string green_down_1r_rule_name = "Green_Down_Candle_Touching_Key_Level_1R_Rule"
+var EntryRule red_up_1r_rule = create_and_add_EntryRule(args, red_up_1r_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_1R_name)
+var EntryRule green_down_1r_rule = create_and_add_EntryRule(args, green_down_1r_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_1R_name)
+
+add_condition_to_EntryRule(args, red_up_1r_rule_name, past_start_time_condition_name)
+add_condition_to_EntryRule(args, green_down_1r_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, red_up_rule_name, touching_sma_condition_name)
 add_condition_to_EntryRule(args, green_down_rule_name, touching_sma_condition_name)
+
+
+// Rules Taking Entries making 1R or less touching nearest key level 
+var exit_action_nearest_key_level_long_name = "Exit at nearest key level LONG"
+var ExitAction exit_action_nearest_key_level_long = create_and_add_ExitAction(args, exit_action_nearest_key_level_long_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+var exit_action_nearest_key_level_short_name = "Exit at nearest key level SHORT"
+var ExitAction exit_action_nearest_key_level_short = create_and_add_ExitAction(args, exit_action_nearest_key_level_short_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+
+var string red_up_nearest_level_rule_name = "Red_Up_Candle_Near_Key_Level_Rule"
+var string green_down_nearest_level_rule_name = "Green_Down_Candle_Near_Key_Level_Rule"
+var EntryRule red_up_nearest_level_rule = create_and_add_EntryRule(args, red_up_nearest_level_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_nearest_key_level_short_name)
+var EntryRule green_down_nearest_level_rule = create_and_add_EntryRule(args, green_down_nearest_level_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_nearest_key_level_long_name)
+
+add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, past_start_time_condition_name)
+add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, past_start_time_condition_name)
+add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, near_sma_condition_short_name)
+add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, near_sma_condition_long_name)
+
+
+
+
+
+
+
 
 
 
