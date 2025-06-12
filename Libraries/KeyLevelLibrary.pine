@@ -93,7 +93,7 @@ KeyLevelLibrary_getNearestKeyLevel(KeyLevelLibraryArgs args, bool ignore_levels_
             else
                 if ignore_levels_currently_touching and (current_distance == 0)
                     continue 
-                else if math.abs(current_distance) < math.abs(result) 
+                else if math.abs(current_distance) < math.abs(current_distance) 
                     closest_distance := current_distance
                     result := current_level 
     result
@@ -113,7 +113,7 @@ KeyLevelLibrary_getNearestKeyLevelLong(KeyLevelLibraryArgs args, bool ignore_lev
                 else
                     if ignore_levels_currently_touching and (current_distance == 0)
                         continue 
-                    else if math.abs(current_distance) < math.abs(result) 
+                    else if math.abs(current_distance) < math.abs(current_distance) 
                         closest_distance := current_distance
                         result := current_level 
     result
@@ -133,11 +133,9 @@ KeyLevelLibrary_getNearestKeyLevelShort(KeyLevelLibraryArgs args, bool ignore_le
                 else
                     if ignore_levels_currently_touching and (current_distance == 0)
                         continue 
-                    else if math.abs(current_distance) < math.abs(result) 
+                    else if math.abs(current_distance) < math.abs(current_distance) 
                         closest_distance := current_distance
                         result := current_level 
     result
 
 
-
-KeyLevelLibrary_isMakingAtLeast_R_toKeyLevel

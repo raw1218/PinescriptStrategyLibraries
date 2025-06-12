@@ -76,17 +76,6 @@ KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma200", ta.sma(clo
 var string touching_sma_condition_name = "TouchingSMA_20_50_100_200"
 update_simple_condition(args,touching_sma_condition_name, KeyLevelLibrary_isPriceTouchingAnyKeyLevel(args.key_level_library_args))
 
-var string near_sma_condition_long_name = "NearSMA_20_50_100_200 LONG"
-KeyLevel nearest_key_level_long = KeyLevelLibrary_getNearestKeyLevelLong(args.key_level_library_args)
-bool is_near_sma_long_helper = MiscLibrary_isMakingAtMost_R_toPrice(high, low, nearest_key_level_long.current_value)
-update_simple_condition(args, near_sma_condition_long_name, is_near_sma_long_helper)
-update_exit_action_value(args, exit_action_nearest_key_level_long_name, nearest_key_level_long.current_value)
-
-var string near_sma_condition_short_name = "NearSMA_20_50_100_200 SHORT"
-KeyLevel nearest_key_level_short = KeyLevelLibrary_getNearestKeyLevelShort(args.key_level_library_args)
-bool is_near_sma_short_helper = MiscLibrary_isMakingAtMost_R_toPrice(low, high, nearest_key_level_short.current_value)
-update_simple_condition(args, near_sma_condition_short_name, is_near_sma_long_helper)
-update_exit_action_value(args, exit_action_nearest_key_level_short_name, nearest_key_level_short.current_value)
 
 
 // Rules Taking Entries touching Key Levels For 1R
@@ -100,8 +89,8 @@ var EntryRule green_down_1r_rule = create_and_add_EntryRule(args, green_down_1r_
 
 add_condition_to_EntryRule(args, red_up_1r_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, green_down_1r_rule_name, past_start_time_condition_name)
-add_condition_to_EntryRule(args, red_up_rule_name, touching_sma_condition_name)
-add_condition_to_EntryRule(args, green_down_rule_name, touching_sma_condition_name)
+add_condition_to_EntryRule(args, red_up_1r_rule_name, touching_sma_condition_name)
+add_condition_to_EntryRule(args, green_down_1r_rule_name, touching_sma_condition_name)
 
 
 // Rules Taking Entries making 1R or less touching nearest key level 
@@ -121,7 +110,17 @@ add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, near_sma_condit
 add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, near_sma_condition_long_name)
 
 
+var string near_sma_condition_long_name = "NearSMA_20_50_100_200 LONG"
+KeyLevel nearest_key_level_long = KeyLevelLibrary_getNearestKeyLevelLong(args.key_level_library_args, true)
+bool is_near_sma_long_helper = MiscLibrary_isMakingAtMost_R_toPrice(high, low, nearest_key_level_long.current_value, 1)
+update_simple_condition(args, near_sma_condition_long_name, is_near_sma_long_helper)
+update_exit_action_value(args, exit_action_nearest_key_level_long_name, nearest_key_level_long.current_value)
 
+var string near_sma_condition_short_name = "NearSMA_20_50_100_200 SHORT"
+KeyLevel nearest_key_level_short = KeyLevelLibrary_getNearestKeyLevelShort(args.key_level_library_args, true)
+bool is_near_sma_short_helper = MiscLibrary_isMakingAtMost_R_toPrice(low, high, nearest_key_level_short.current_value, 1)
+update_simple_condition(args, near_sma_condition_short_name, is_near_sma_long_helper)
+update_exit_action_value(args, exit_action_nearest_level_short_name, nearest_key_level_short.current_value)
 
 
 
