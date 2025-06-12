@@ -1,0 +1,57 @@
+type KeyLevel
+    string name = na 
+    float current_value = na 
+
+type KeyLevelLibraryArgs 
+    array<KeyLevel> key_levels = na 
+
+create_KeyLevelLibraryArgs() => 
+    KeyLevelLibraryArgs args = KeyLevelLibraryArgs.new() 
+    args.key_levels = array.new<KeyLevel>() 
+
+
+get_KeyLeveL_from_name(KeyLevelLibraryArgs args, string name) =>
+    KeyLevel result = na 
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_key_level = args.key_levels.get(i)
+            if current_key_level.name == name 
+                result := key_level 
+                break 
+    result 
+
+update_KeyLevel(KeyLevelLibraryArgs args, string name, float value) => 
+    KeyLevel level = get_KeyLeveL_from_name(args, name)
+    //if it doesn't exist, add it 
+    if na(level)
+        level := KeyLevel.new()
+        level.name := name 
+        level.current_value := value 
+        args.key_levels.push(level)
+    else
+        level.current_value := value 
+
+
+helper_isPriceTouchingKeyLevel(KeyLevel key_level) =>
+    float price = key_level.current_value 
+    (low <= price) and (high >= price)
+
+KeyLevelLibrary_isPriceTouchingAnyKeyLevel(KeyLevelLibraryArgs args) =>
+    bool result = false 
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_level = args.key_levels.get(i)
+            if helper_isPriceTouchingKeyLevel(current_level)
+                result := true 
+                break 
+    result 
+
+KeyLevelLibrary_isPriceTouchingKeyLevel(KeyLevelLibraryArgs args, string name) => 
+    bool result = false 
+    KeyLevel level = get_KeyLeveL_from_name(args, name)
+    if not na(level)
+        result := helper_isPriceTouchingKeyLevel(level)
+    result
+
+
+

@@ -4,6 +4,7 @@ import os
 FILES = [
     "Libraries/TradeManagerLibrary.pine",
     "Libraries/BooleanExpressionLibrary.pine",
+    "Libraries/KeyLevelLibrary.pine",
     "Libraries/EntryStrategyLibrary.pine",
     "Strategies/FinalStrategy.pine"
 ]
