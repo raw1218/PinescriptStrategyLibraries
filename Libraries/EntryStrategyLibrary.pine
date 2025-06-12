@@ -57,6 +57,7 @@ type EntryLibraryArgs
 	array<EntryAction> entry_actions = na 
 	EntryLibraryOutput output = na
 	TradeLibraryArgs trade_library_args = na
+	KeyLevelLibraryArgs key_level_library_args = na
 	bool process_longs = true 
 	bool process_shorts = true 
 create_EntryLibraryArgs() => 
@@ -67,6 +68,7 @@ create_EntryLibraryArgs() =>
 	args.entry_actions := array.new<EntryAction>()
 	args.output := create_EntryLibraryOutput()
 	args.trade_library_args := create_TradeLibraryArgs()
+	args.key_level_library_args := create_KeyLevelLibraryArgs()
 	args
 
 

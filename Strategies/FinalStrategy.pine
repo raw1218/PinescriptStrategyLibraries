@@ -78,6 +78,23 @@ add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_nam
 add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
 
 
+//key levels 
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma20", ta.sma(close, 20))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma50", ta.sma(close, 50))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma100", ta.sma(close, 100))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma200", ta.sma(close, 200))
+
+var string touching_sma_condition_name = "TouchingSMA_20_50_100_200"
+update_simple_condition(args,touching_sma_condition_name, KeyLevelLibrary_isPriceTouchingAnyKeyLevel(args.key_level_library_args))
+add_condition_to_EntryRule(args, red_up_rule_name, touching_sma_condition_name)
+add_condition_to_EntryRule(args, green_down_rule_name, touching_sma_condition_name)
+
+
+
+
+
+
+
 var label my_label = na 
 // if not na(my_label)
 // 	my_label.delete()
