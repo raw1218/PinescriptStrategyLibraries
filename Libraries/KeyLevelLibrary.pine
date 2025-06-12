@@ -7,7 +7,7 @@ type KeyLevelLibraryArgs
 
 create_KeyLevelLibraryArgs() => 
     KeyLevelLibraryArgs args = KeyLevelLibraryArgs.new() 
-    args.key_levels = array.new<KeyLevel>() 
+    args.key_levels := array.new<KeyLevel>() 
 
 
 get_KeyLeveL_from_name(KeyLevelLibraryArgs args, string name) =>
@@ -16,11 +16,11 @@ get_KeyLeveL_from_name(KeyLevelLibraryArgs args, string name) =>
         for i = args.key_levels.size() - 1 to 0 
             KeyLevel current_key_level = args.key_levels.get(i)
             if current_key_level.name == name 
-                result := key_level 
+                result := current_key_level 
                 break 
     result 
 
-update_KeyLevel(KeyLevelLibraryArgs args, string name, float value) => 
+KeyLevelLibrary_updateKeyLevel(KeyLevelLibraryArgs args, string name, float value) => 
     KeyLevel level = get_KeyLeveL_from_name(args, name)
     //if it doesn't exist, add it 
     if na(level)
@@ -30,6 +30,7 @@ update_KeyLevel(KeyLevelLibraryArgs args, string name, float value) =>
         args.key_levels.push(level)
     else
         level.current_value := value 
+    0//dummy return value
 
 
 helper_isPriceTouchingKeyLevel(KeyLevel key_level) =>
