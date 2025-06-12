@@ -73,7 +73,7 @@ helper_getDistanceToKeyLevel(KeyLevel level) =>
 //returns 0 if touching (na if invalid level name), positive if level is above price, negative if level is below price 
 KeyLevelLibrary_getDistanceToKeyLevel(KeyLevelLibraryArgs args, string name) =>
     float result = na
-    KeyLevel level = get_KeyLeveL_from_name(name)
+    KeyLevel level = get_KeyLeveL_from_name(args, name)
     if not na(level)
         result := helper_getDistanceToKeyLevel(level)
     result 
@@ -92,7 +92,7 @@ KeyLevelLibrary_getDistanceToNearestKeyLevel(KeyLevelLibraryArgs args, string na
                     continue 
                 else if math.abs(current_distance) < math.abs(result) 
                     result := current_distance 
-    current_distance 
+    result
     
 
         
