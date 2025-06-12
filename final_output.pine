@@ -496,6 +496,48 @@ KeyLevelLibrary_isPriceTouchingKeyLevel(KeyLevelLibraryArgs args, string name) =
     result
 
 
+//returns 0 if touching, positive if level is above price, negative if level below price
+helper_getDistanceToKeyLevel(KeyLevel level) =>
+    float distance = 0
+    if helper_isPriceTouchingKeyLevel(level)
+        distance := 0 
+    else
+        bool level_is_above_price = high < level.current_value
+        bool level_is_below_price = not level_is_above_price
+        if level_is_above_price 
+            distance := level.current_value - high //should be positive
+        else if level_is_below_price 
+            distance := level.current_value - low //should be negative
+    distance 
+
+//returns 0 if touching (na if invalid level name), positive if level is above price, negative if level is below price 
+KeyLevelLibrary_getDistanceToKeyLevel(KeyLevelLibraryArgs args, string name) =>
+    float result = na
+    KeyLevel level = get_KeyLeveL_from_name(name)
+    if not na(level)
+        result := helper_getDistanceToKeyLevel(level)
+    result 
+
+
+KeyLevelLibrary_getDistanceToNearestKeyLevel(KeyLevelLibraryArgs args, string name, bool ignore_levels_currently_touching) =>
+    float result = na 
+    if args.key_levels.size() > 0 
+        for i = args.key_levels.size() - 1 to 0 
+            KeyLevel current_level = args.key_levels.get(i)
+            float current_distance = helper_getDistanceToKeyLevel(current_level)
+            if na(result)
+                result := current_distance 
+            else
+                if ignore_levels_currently_touching
+                    continue 
+                else if math.abs(current_distance) < math.abs(result) 
+                    result := current_distance 
+    current_distance 
+    
+
+        
+
+
 
 
 
@@ -533,19 +575,28 @@ type EntryAction
 	Direction trade_direction = na 
 	OrderType order_type = na 
 
+enum EXIT_ACTION_TYPE
+	SetRiskRewardRatio
+	SetTargetPrice
+type ExitAction 
+	string name = na 
+	EXIT_ACTION_TYPE = na 
+	float rr_or_target_value = na 
+
 
 type EntryRule
 	string rule_name = na 
 	array<BooleanExpression> conditions = na 
-	EntryAction action = na 
+	EntryAction entry_action = na 
+	ExitAction exit_action = na
 
 	
 type EntryLibraryOutput
 	bool has_output = false 
-	array<EntryAction> taken_actions = na
+	array<EntryRule> taken_actions = na
 create_EntryLibraryOutput() =>
 	EntryLibraryOutput output = EntryLibraryOutput.new() 
-	output.taken_actions := array.new<EntryAction>()
+	output.taken_actions := array.new<EntryRule>()
 	output
 reset_EntryLibraryOutput(EntryLibraryOutput output) =>
 	output.has_output := false 
@@ -557,6 +608,7 @@ type EntryLibraryArgs
 	array<EntryRule> entry_rules = na 
 	array<BooleanExpression> compound_conditions = na 
 	array<EntryAction> entry_actions = na 
+	array<ExitAction> exit_actions = na
 	EntryLibraryOutput output = na
 	TradeLibraryArgs trade_library_args = na
 	KeyLevelLibraryArgs key_level_library_args = na
@@ -568,6 +620,7 @@ create_EntryLibraryArgs() =>
 	args.entry_rules := array.new<EntryRule>()
 	args.compound_conditions := array.new<BooleanExpression>()
 	args.entry_actions := array.new<EntryAction>()
+	args.exit_actions := array.new<ExitAction>()
 	args.output := create_EntryLibraryOutput()
 	args.trade_library_args := create_TradeLibraryArgs()
 	args.key_level_library_args := create_KeyLevelLibraryArgs()
@@ -650,7 +703,7 @@ create_and_add_EntryAction(EntryLibraryArgs args, string name, ENTRY_ACTION_TYPE
 	add_EntryAction(args, action)
 	action // return action object so function can be used with var to be called once per script 
 
-get_action_by_name(EntryLibraryArgs args, string name) => 
+get_entry_action_by_name(EntryLibraryArgs args, string name) => 
 	EntryAction Action = na 
 	if args.entry_actions.size() > 0
 		for i = args.entry_actions.size() - 1 to 0 
@@ -660,14 +713,36 @@ get_action_by_name(EntryLibraryArgs args, string name) =>
 	Action
 
 
+create_and_add_ExitAction(EntryLibraryArgs args, string name, EXIT_ACTION_TYPE action_type, float exit_value) =>
+	ExitAction action = ExitAction.new(name, action_type, exit_value)
+	args.exit_actions.push(action)
+	action
+
+get_exit_action_by_name(EntryLibraryArgs args, string name) => 
+	ExitAction Action = na 
+	if args.exit_actions.size() > 0
+		for i = args.exit_actions.size() - 1 to 0 
+			ExitAction cur_exit = args.exit_actions.get(i)
+			if cur_exit.name == name 
+				Action := cur_exit
+	Action
+
+update_exit_action_value(EntryLibraryArgs args, string name, float value) =>
+	ExitAction exit_action = get_exit_action_by_name(args, name)
+	if not na(exit_action)
+		exit_action.rr_or_target_value := value 
+	0 //dummy return value 	
+
 // needs to be called on the same candle that the entry is for
-create_trade_from_EntryAction(EntryAction action, int candle_index) =>
-	bool is_long = action.trade_direction == Direction.Long 
-	bool is_short = action.trade_direction == Direction.Short
+create_trade_from_EntryAction_and_ExitAction(EntryAction entry_action, ExitAction exit_action, int candle_index) =>
+	Entry entry = na 
+	bool is_long = entry_action.trade_direction == Direction.Long 
+	bool is_short = entry_action.trade_direction == Direction.Short
 	float entry_price = 0
 	float stop_loss_price = 0
 	float target_price = 0
-	if action.type == ENTRY_ACTION_TYPE.EntryIsCandle
+	//handle entry action 
+	if entry_action.type == ENTRY_ACTION_TYPE.EntryIsCandle
 		if is_long 
 			entry_price := high 
 			stop_loss_price := low 
@@ -675,17 +750,23 @@ create_trade_from_EntryAction(EntryAction action, int candle_index) =>
 			entry_price := low 
 			stop_loss_price := high 
 
-	//set target at 1R for now 
-	float rr = 1
-	Entry entry = create_Entry_with_target_RR(action.trade_direction, action.order_type, entry_price, stop_loss_price, rr, candle_index)
+	//process exit action 
+	if exit_action.type == EXIT_ACTION_TYPE.SetRiskRewardRatio
+		float rr = exit_action.rr_or_target_value
+		entry := create_Entry_with_target_RR(entry_action.trade_direction, entry_action.order_type, entry_price, stop_loss_price, rr, candle_index)
+	else if exit_action.type == EXIT_ACTION_TYPE.SetTargetPrice
+		float target = exit_action.rr_or_target_value
+		entry := create_Entry_with_target_price(entry_action.trade_direction, entry_action.order_type, entry_price, stop_loss_price, target, candle_index)
+
 	entry
 
 take_active_trades(EntryLibraryArgs args) =>
-	array<EntryAction> active_actions = args.output.taken_actions
+	array<EntryRule> active_actions = args.output.taken_actions
 	if active_actions.size() > 0 
 		for i = active_actions.size() - 1 to 0 
-			EntryAction current_action = active_actions.get(i)
-			Entry entry = create_trade_from_EntryAction(current_action, bar_index)
+			EntryAction current_entry_action = active_actions.get(i).entry_action
+			ExitAction current_exit_action = active_actions.get(i).exit_action
+			Entry entry = create_trade_from_EntryAction(current_entry_action, current_exit_action, bar_index)
 			place_trade(args.trade_library_args, entry)
 
 
@@ -694,18 +775,19 @@ take_active_trades(EntryLibraryArgs args) =>
 //////// FUNCTIONS FOR RULES
 //////////////////////////////////
 
-create_and_add_EntryRule(EntryLibraryArgs args, string name, string condition_name, string action_name) => 
+create_and_add_EntryRule(EntryLibraryArgs args, string name, string condition_name, string entry_action_name, string exit_action_name) => 
 	//look for the condition by its name 
 	BooleanExpression cond = get_condition_by_name(args, condition_name)
-	EntryAction action = get_action_by_name(args, action_name)
+	EntryAction entry_action = get_entry_action_by_name(args, entry_action_name)
+	ExitAction exit_action = get_exit_action_by_name(args, exit_action_name)
 	array<BooleanExpression> conditions = array.new<BooleanExpression>()
 	conditions.push(cond)
-	EntryRule rule = EntryRule.new(name, conditions, action)
+	EntryRule rule = EntryRule.new(name, conditions, entry_action, exit_action)
 	args.entry_rules.push(rule)
 	rule 
-	
+	 
 
-get_rule_by_name(EntryLibraryArgs args, string name) => 
+get_rule_by_name(EntryLibraryArgs args, string name) =>  
 	EntryRule rule = na 
 	array<EntryRule> entry_rules = args.entry_rules
 	if entry_rules.size() > 0 
@@ -748,7 +830,7 @@ process_EntryRules(EntryLibraryArgs args) =>
 				bool is_long = current_rule.action.trade_direction == Direction.Long
 				bool is_short = current_rule.action.trade_direction == Direction.Short
 				if (is_long and args.process_longs) or (is_short and args.process_shorts)
-					args.output.taken_actions.push(current_rule.action)
+					args.output.taken_actions.push(current_rule)
 					args.output.has_output := true
 				
 				
@@ -843,11 +925,19 @@ var entry_action_short_stop_name = "Place Short Stop On Current Candle"
 var EntryAction entry_action_long_stop = create_and_add_EntryAction(args, entry_action_long_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Long, OrderType.Stop)
 var EntryAction entry_action_short_stop = create_and_add_EntryAction(args, entry_action_short_stop_name, ENTRY_ACTION_TYPE.EntryIsCandle,Direction.Short, OrderType.Stop)
 
+// exit actions 
+var exit_action_1R_name = "Exit at 1R"
+var ExitAction exit_action_1R = create_and_add_ExitAction(args, exit_action_1R_name, EXIT_ACTION_TYPE.SetRiskRewardRatio, 1)
+
+var exit_action_nearest_key_level_name = "Exit at nearest key level"
+var ExitAction exit_action_nearest_key_level = create_and_add_ExitAction(args, exit_action_nearest_key_level_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+
+
 // rules 
 var string red_up_rule_name = "Red_Up_Candle_Rule"
 var string green_down_rule_name = "Green_Down_Candle_Rule"
-var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name)
-var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name)
+var EntryRule red_up_rule = create_and_add_EntryRule(args, red_up_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_1R_name)
+var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_1R_name)
 
 add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
