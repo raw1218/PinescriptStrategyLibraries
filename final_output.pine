@@ -558,6 +558,7 @@ type EntryLibraryArgs
 	array<EntryAction> entry_actions = na 
 	EntryLibraryOutput output = na
 	TradeLibraryArgs trade_library_args = na
+	KeyLevelLibraryArgs key_level_library_args = na
 	bool process_longs = true 
 	bool process_shorts = true 
 create_EntryLibraryArgs() => 
@@ -568,6 +569,7 @@ create_EntryLibraryArgs() =>
 	args.entry_actions := array.new<EntryAction>()
 	args.output := create_EntryLibraryOutput()
 	args.trade_library_args := create_TradeLibraryArgs()
+	args.key_level_library_args := create_KeyLevelLibraryArgs()
 	args
 
 
@@ -848,6 +850,23 @@ var EntryRule green_down_rule = create_and_add_EntryRule(args, green_down_rule_n
 
 add_condition_to_EntryRule(args, red_up_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, green_down_rule_name, past_start_time_condition_name)
+
+
+//key levels 
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma20", ta.sma(close, 20))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma50", ta.sma(close, 50))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma100", ta.sma(close, 100))
+KeyLevelLibrary_updateKeyLevel(args.key_level_library_args, "sma200", ta.sma(close, 200))
+
+var string touching_sma_condition_name = "TouchingSMA_20_50_100_200"
+update_simple_condition(args,touching_sma_condition_name, KeyLevelLibrary_isPriceTouchingAnyKeyLevel(args.key_level_library_args))
+add_condition_to_EntryRule(args, red_up_rule_name, touching_sma_condition_name)
+add_condition_to_EntryRule(args, green_down_rule_name, touching_sma_condition_name)
+
+
+
+
+
 
 
 var label my_label = na 
