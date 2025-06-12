@@ -8,6 +8,7 @@ type KeyLevelLibraryArgs
 create_KeyLevelLibraryArgs() => 
     KeyLevelLibraryArgs args = KeyLevelLibraryArgs.new() 
     args.key_levels := array.new<KeyLevel>() 
+    args
 
 
 get_KeyLeveL_from_name(KeyLevelLibraryArgs args, string name) =>
