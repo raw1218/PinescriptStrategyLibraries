@@ -1,0 +1,11 @@
+MiscLibrary_isMakingAtLeast_R_toPrice(float entry_price, float stop_loss_price, float target_price, float target_R) =>
+    distance_to_stop = entry_price - stop_loss_price
+    distance_to_target = target_price - entry_price
+    float rr = distance_to_target / distance_to_stop
+    rr >= target_R 
+
+MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, float target_price, float target_R) =>
+    distance_to_stop = entry_price - stop_loss_price
+    distance_to_target = target_price - entry_price
+    float rr = distance_to_target / distance_to_stop
+    rr <= target_R 
