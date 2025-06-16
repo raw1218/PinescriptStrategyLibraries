@@ -27,12 +27,20 @@ type ChartDrawingBox
 	int right_bar_index = na
 	color box_color = na 
 	color border_color = na
-	box box_item = na
+	box tv_box_item = na
+
+type ChartDrawingItem
+	string name = na
+	ChartDrawingBox chart_box = na
+
 
 type ChartDrawingGroup
 	string name = na
-	ChartDrawingBox current_drawing = na
-	array<ChartDrawingBox> finished_drawings = na 
+	array<ChartDrawingItem> current_drawings = na
+	array<ChartDrawingItem> finished_drawings = na 
+
+	int max_boxes_in_group = 50 //no more than 50 boxes drawn from this group
+	int max_box_width = 200  //if we try to draw a box thats that big
 
 
 type ChartDrawingArgs
@@ -47,38 +55,91 @@ helper_getChartDrawingGroupByName(ChartDrawingArgs args, string group_name) =>
 				result := current_group 
 				break
 	result 
+
+helper_getCurrentChartDrawingItemByName(ChartDrawingArgs args, ChartDrawingGroup group, string item_name) =>
+	ChartDrawingItem result = na 
+	if group.current_drawings.size() > 0 
+		for i = group.current_drawings.size() - 1 to 0 
+			ChartDrawingItem current_item = group.current_drawings.get(i)
+			if current_item.name == item_name 
+				result := current_item 
+				break 
+	result 
  
-helper_createChartDrawingGroup(ChartDrawingArgs args, string group_name) =>
+helper_createAndAdd_ChartDrawingGroup(ChartDrawingArgs args, string group_name) =>
 	ChartDrawingGroup group = ChartDrawingGroup.new()
 	group.name := group_name 
-	group.finished_drawings := array.new<ChartDrawingBox>() 
+	group.finished_drawings := array.new<ChartDrawingItem>() 
+	group.current_drawings := array.new<ChartDrawingItem>()
 	args.groups.push(group)
 	group 
 
-ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, ChartDrawingBox chart_box) => 
+helper_createAndAdd_ChartDrawingItem(ChartDrawingArgs args, ChartDrawingGroup group, string item_name) =>
+	ChartDrawingItem item = ChartDrawingItem.new() 
+	item.name := item_name 
+	group.current_drawings.push(item)
+	item 
+	
+helper_removeCurrentChartDrawingItemByName(ChartDrawingArgs args, ChartDrawingGroup group, string item_name) =>
+	if group.current_drawings.size() > 0
+		for i = groups.current_drawings.size() - 1 to 0 
+			if groups.current_drawings.get(i).name == item_name 
+				groups.current_drawings.remove(i)
+				break; //assumes no duplicates
+
+
+ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string item_name, ChartDrawingBox chart_box) => 
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
 	// add the group if it doesn't already exist
 	if na(group)
-		group := helper_createChartDrawingGroup(args, group_name)
+		group := helper_createAndAdd_ChartDrawingGroup(args, group_name)
 
+	//add the item if it doesn't already exist
+	ChartDrawingItem item = helper_getCurrentChartDrawingItemByName(args, group, item_name)
+	if na(item)
+		item := helper_createAndAdd_ChartDrawingItem(args, group, item_name)
+		
 	//undraw the previous drawing before we draw the new one 
-	if not na(group.current_drawing)
-		group.current_drawing.box_item.delete()
+	if not na(item.chart_box)
+		if not na(item.chart_box.tv_box_item)
+			item.chart_box.tv_box_item.delete()
+	
 	//draw the new box
-	group.current_drawing := chart_box
-	group.current_drawing.box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
+	item.chart_box := chart_box 
+	item.chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
          top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
 	
 	
 //returns 0 on success, 1 on error
-ChartDrawingLibrary_FinishCurrentBox(ChartDrawingArgs args, string group_name) => 
+ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string box_name) => 
 	int return_code = 0
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
-	// add the group if it doesn't already exist
+	ChartDrawingItem item = na
+	// find if item exists 
 	if not na(group)
+		item := helper_getCurrentChartDrawingItemByName(args, group, item_name)
+	if not na(item)
 		//assumes the box is already drawn 
-		group.finished_drawings.push(group.current_drawing)
-		group.current_drawing := na 
+		group.finished_drawings.push(item)
+		helper_removeCurrentChartDrawingItemByName(args, group, item.name)
+		return_code := 0
+	else
+		//we should not reach here this is an error
+		return_code := 1
+	return_code 
+
+
+ChartDrawingLibrary_CancelDrawing(ChartDrawingArgs args, string group_name, string item_name) => 
+	int return_code = 0
+	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
+	ChartDrawingItem item = na
+	// find if item exists 
+	if not na(group)
+		item := helper_getCurrentChartDrawingItemByName(args, group, item_name)
+	if not na(item)
+		//delete the drawing 
+		item.tv_box_item.delete()
+		helper_removeCurrentChartDrawingItemByName(args, group, item.name)
 		return_code := 0
 	else
 		//we should not reach here this is an error
