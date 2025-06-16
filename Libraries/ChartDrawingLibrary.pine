@@ -6,8 +6,8 @@
 //Finish_box(group_name, coordinates)
 
 type ChartDrawingBox
-	float high_price = na 
-	float low_price = na 
+	float top_price = na 
+	float bottom_price = na 
 	int left_bar_index = na 
 	int right_bar_index = na
 	color box_color = na 
@@ -51,9 +51,9 @@ ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, ChartDra
 		group.current_drawing.box_item.delete()
 	//draw the new box
 	group.current_drawing := chart_box
-	group.current_drawing.box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index, top = chart_box.high_price, low = chart_box.low_price, box_color = chart_box.box_color, border_color = chart_box.border_color)
+	group.current_drawing.box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
+         top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
 	
-
 	
 //returns 0 on success, 1 on error
 ChartDrawingLibrary_FinishCurrentBox(ChartDrawingArgs args, string group_name) => 
@@ -70,6 +70,17 @@ ChartDrawingLibrary_FinishCurrentBox(ChartDrawingArgs args, string group_name) =
 		return_code := 1
 	return_code 
 
+
+ChartDrawingLibrary_createChartDrawingBox(ChartDrawingArgs args, float top_price, float bottom_price, int left_bar_index, int right_bar_index, color bg_color, color border_color) =>
+	ChartDrawingBox my_box = ChartDrawingBox.new()
+	my_box.top_price := top_price 
+	my_box.bottom_price := bottom_price 
+	my_box.left_bar_index := left_bar_index 
+	my_box.right_bar_index := right_bar_index
+	my_box.box_color := bg_color 
+	my_box.border_color := border_color
+
+	my_box //return the box 
 
 
 
