@@ -82,10 +82,10 @@ helper_createAndAdd_ChartDrawingItem(ChartDrawingArgs args, ChartDrawingGroup gr
 	
 helper_removeCurrentChartDrawingItemByName(ChartDrawingArgs args, ChartDrawingGroup group, string item_name) =>
 	if group.current_drawings.size() > 0
-		for i = groups.current_drawings.size() - 1 to 0 
-			if groups.current_drawings.get(i).name == item_name 
-				groups.current_drawings.remove(i)
-				break; //assumes no duplicates
+		for i = group.current_drawings.size() - 1 to 0 
+			if group.current_drawings.get(i).name == item_name 
+				group.current_drawings.remove(i)
+				break //assumes no duplicates
 
 
 ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string item_name, ChartDrawingBox chart_box) => 
@@ -111,7 +111,7 @@ ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string i
 	
 	
 //returns 0 on success, 1 on error
-ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string box_name) => 
+ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string item_name) => 
 	int return_code = 0
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
 	ChartDrawingItem item = na
@@ -138,7 +138,7 @@ ChartDrawingLibrary_CancelDrawing(ChartDrawingArgs args, string group_name, stri
 		item := helper_getCurrentChartDrawingItemByName(args, group, item_name)
 	if not na(item)
 		//delete the drawing 
-		item.tv_box_item.delete()
+		item.chart_box.tv_box_item.delete()
 		helper_removeCurrentChartDrawingItemByName(args, group, item.name)
 		return_code := 0
 	else
