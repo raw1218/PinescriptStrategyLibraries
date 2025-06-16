@@ -12,6 +12,87 @@ MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, f
     rr <= target_R 
 
 
+// === Libraries/ChartDrawingLibrary.pine ===
+/////////////// Chart Drawing Library //////////////////////////////////////////////////////////
+//Supports grouping different sets of boxes / drawings into named groups
+//Each group has one active (dynamic) drawing that updates every candle, and a set of finished (static) drawings that are drawn once. 
+//Start_new_box(group_name, coordinates)
+//Update_box(group_name, coordinates)
+//Finish_box(group_name, coordinates)
+
+type ChartDrawingBox
+	float high_price = na 
+	float low_price = na 
+	int left_bar_index = na 
+	int right_bar_index = na
+	color box_color = na 
+	color border_color = na
+	box box_item = na
+
+type ChartDrawingGroup
+	string name = na
+	ChartDrawingBox current_drawing = na
+	array<ChartDrawingBox> finished_drawings = na 
+
+
+type ChartDrawingArgs
+	array<ChartDrawingGroup> groups = na
+
+helper_getChartDrawingGroupByName(ChartDrawingArgs args, string group_name) =>
+	ChartDrawingGroup result = na 
+	if args.groups.size() > 0
+		for i = args.groups.size() - 1 to 0
+			ChartDrawingGroup current_group = args.groups.get(i)
+			if group_name == current_group.name
+				result := current_group 
+				break
+	result 
+ 
+helper_createChartDrawingGroup(ChartDrawingArgs args, string group_name) =>
+	ChartDrawingGroup group = ChartDrawingGroup.new()
+	group.name := group_name 
+	group.finished_drawings := array.new<ChartDrawingBox>() 
+	args.groups.push(group)
+	group 
+
+ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, ChartDrawingBox chart_box) => 
+	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
+	// add the group if it doesn't already exist
+	if na(group)
+		group := helper_createChartDrawingGroup(args, group_name)
+
+	//undraw the previous drawing before we draw the new one 
+	if not na(group.current_drawing)
+		group.current_drawing.box_item.delete()
+	//draw the new box
+	group.current_drawing := chart_box
+	group.current_drawing.box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index, top = chart_box.high_price, low = chart_box.low_price, box_color = chart_box.box_color, border_color = chart_box.border_color)
+	
+
+	
+//returns 0 on success, 1 on error
+ChartDrawingLibrary_FinishCurrentBox(ChartDrawingArgs args, string group_name) => 
+	int return_code = 0
+	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
+	// add the group if it doesn't already exist
+	if not na(group)
+		//assumes the box is already drawn 
+		group.finished_drawings.push(group.current_drawing)
+		group.current_drawing := na 
+		return_code := 0
+	else
+		//we should not reach here this is an error
+		return_code := 1
+	return_code 
+
+
+
+
+
+
+
+	
+
 // === Libraries/TradeManagerLibrary.pine ===
 //@version=6
 // === ENUM DEFINITIONS ===
