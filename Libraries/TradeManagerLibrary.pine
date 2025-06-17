@@ -411,16 +411,7 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
                 process_trade_win(args, entry)
 
 
-// Loops over all trades and processes them using the current candle's high/low
-TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
-    args.something_has_changed := false 
-    if args.entry_array.size() > 0
-        for i = args.entry_array.size() - 1 to 0
-            Entry current_entry = args.entry_array.get(i)
-            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
-    //optional debugging / drawing 
-    if args.debugger.enable_debugging
-        TradeManagerLibraryDebugger_processCandle(args)
+
 
 // Removes trades that are no longer active (Invalidated, Success, or Loss)
 remove_all_finished_trades(TradeLibraryArgs args) =>
@@ -436,6 +427,20 @@ remove_all_finished_trades(TradeLibraryArgs args) =>
                 finished := true
             if finished
                 args.entry_array.remove(i)
+
+// Loops over all trades and processes them using the current candle's high/low
+TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
+    remove_all_finished_trades(args)
+    args.something_has_changed := false 
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
+    //optional debugging / drawing 
+    if args.debugger.enable_debugging
+        TradeManagerLibraryDebugger_processCandle(args)
+
+
 
 
         

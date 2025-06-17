@@ -87,83 +87,57 @@ var EntryRule green_down_1r_rule = create_and_add_EntryRule(args, green_down_1r_
 
 add_condition_to_EntryRule(args, red_up_1r_rule_name, past_start_time_condition_name)
 add_condition_to_EntryRule(args, green_down_1r_rule_name, past_start_time_condition_name)
-add_condition_to_EntryRule(args, red_up_1r_rule_name, touching_sma_condition_name)
-add_condition_to_EntryRule(args, green_down_1r_rule_name, touching_sma_condition_name)
+//add_condition_to_EntryRule(args, red_up_1r_rule_name, touching_sma_condition_name)
+//add_condition_to_EntryRule(args, green_down_1r_rule_name, touching_sma_condition_name)
 
 
 // Rules Taking Entries making 1R or less touching nearest key level 
-var exit_action_nearest_key_level_long_name = "Exit at nearest key level LONG"
-var ExitAction exit_action_nearest_key_level_long = create_and_add_ExitAction(args, exit_action_nearest_key_level_long_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
-var exit_action_nearest_key_level_short_name = "Exit at nearest key level SHORT"
-var ExitAction exit_action_nearest_key_level_short = create_and_add_ExitAction(args, exit_action_nearest_key_level_short_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+// var exit_action_nearest_key_level_long_name = "Exit at nearest key level LONG"
+// var ExitAction exit_action_nearest_key_level_long = create_and_add_ExitAction(args, exit_action_nearest_key_level_long_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
+// var exit_action_nearest_key_level_short_name = "Exit at nearest key level SHORT"
+// var ExitAction exit_action_nearest_key_level_short = create_and_add_ExitAction(args, exit_action_nearest_key_level_short_name, EXIT_ACTION_TYPE.SetTargetPrice, 0) //need to update this every bar
 
-var string red_up_nearest_level_rule_name = "Red_Up_Candle_Near_Key_Level_Rule"
-var string green_down_nearest_level_rule_name = "Green_Down_Candle_Near_Key_Level_Rule"
-var EntryRule red_up_nearest_level_rule = create_and_add_EntryRule(args, red_up_nearest_level_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_nearest_key_level_short_name)
-var EntryRule green_down_nearest_level_rule = create_and_add_EntryRule(args, green_down_nearest_level_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_nearest_key_level_long_name)
-
-
-var string near_sma_condition_long_name = "NearSMA_20_50_100_200 LONG"
-KeyLevel nearest_key_level_long = KeyLevelLibrary_getNearestKeyLevelLong(args.key_level_library_args, true)
-bool is_near_sma_long_helper = false 
-if not na(nearest_key_level_long)
-    is_near_sma_long_helper := MiscLibrary_isMakingAtMost_R_toPrice(high, low, nearest_key_level_long.current_value, 1)
-    update_exit_action_value(args, exit_action_nearest_key_level_long_name, nearest_key_level_long.current_value)
-update_simple_condition(args, near_sma_condition_long_name, is_near_sma_long_helper)
+// var string red_up_nearest_level_rule_name = "Red_Up_Candle_Near_Key_Level_Rule"
+// var string green_down_nearest_level_rule_name = "Green_Down_Candle_Near_Key_Level_Rule"
+// var EntryRule red_up_nearest_level_rule = create_and_add_EntryRule(args, red_up_nearest_level_rule_name, red_up_candle_condition_name, entry_action_short_stop_name, exit_action_nearest_key_level_short_name)
+// var EntryRule green_down_nearest_level_rule = create_and_add_EntryRule(args, green_down_nearest_level_rule_name, green_down_candle_condition_name, entry_action_long_stop_name, exit_action_nearest_key_level_long_name)
 
 
-var string near_sma_condition_short_name = "NearSMA_20_50_100_200 SHORT"
-KeyLevel nearest_key_level_short = KeyLevelLibrary_getNearestKeyLevelShort(args.key_level_library_args, true)
-bool is_near_sma_short_helper = false 
-if not na(nearest_key_level_short)
-    is_near_sma_short_helper := MiscLibrary_isMakingAtMost_R_toPrice(low, high, nearest_key_level_short.current_value, 1)
-    update_exit_action_value(args, exit_action_nearest_key_level_short_name, nearest_key_level_short.current_value)
-update_simple_condition(args, near_sma_condition_short_name, is_near_sma_long_helper)
+// var string near_sma_condition_long_name = "NearSMA_20_50_100_200 LONG"
+// KeyLevel nearest_key_level_long = KeyLevelLibrary_getNearestKeyLevelLong(args.key_level_library_args, true)
+// bool is_near_sma_long_helper = false 
+// if not na(nearest_key_level_long)
+//     is_near_sma_long_helper := MiscLibrary_isMakingAtMost_R_toPrice(high, low, nearest_key_level_long.current_value, 1)
+//     update_exit_action_value(args, exit_action_nearest_key_level_long_name, nearest_key_level_long.current_value)
+// update_simple_condition(args, near_sma_condition_long_name, is_near_sma_long_helper)
 
 
-add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, past_start_time_condition_name)
-add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, past_start_time_condition_name)
-add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, near_sma_condition_short_name)
-add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, near_sma_condition_long_name)
+// var string near_sma_condition_short_name = "NearSMA_20_50_100_200 SHORT"
+// KeyLevel nearest_key_level_short = KeyLevelLibrary_getNearestKeyLevelShort(args.key_level_library_args, true)
+// bool is_near_sma_short_helper = false 
+// if not na(nearest_key_level_short)
+//     is_near_sma_short_helper := MiscLibrary_isMakingAtMost_R_toPrice(low, high, nearest_key_level_short.current_value, 1)
+//     update_exit_action_value(args, exit_action_nearest_key_level_short_name, nearest_key_level_short.current_value)
+// update_simple_condition(args, near_sma_condition_short_name, is_near_sma_long_helper)
 
 
+// add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, past_start_time_condition_name)
+// add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, past_start_time_condition_name)
+// add_condition_to_EntryRule(args, red_up_nearest_level_rule_name, near_sma_condition_short_name)
+// add_condition_to_EntryRule(args, green_down_nearest_level_rule_name, near_sma_condition_long_name)
 
 
-
-
-
-
-var label my_label = na 
-// if not na(my_label)
-// 	my_label.delete()
 
 args.process_longs := true 
 args.process_shorts := false 
-args.trade_library_args.parameters.pyramiding_allowed := false 
+args.trade_library_args.parameters.pyramiding_allowed := true
 EntryStrategyLibrary_process_candle(args)
-
-//print out the trades in the trade library 
-bool should_print = args.trade_library_args.something_has_changed or barstate.islast
-should_print := false
-string my_text = ""
-if should_print
-    my_text := stringify_all_trades(args.trade_library_args)
-    my_text += "\n\n" + stringify_TradeDataCollector(args.trade_library_args.data_collector)
-    if not na(my_text)
-        my_label := label.new(text = my_text, x = bar_index, y = high)
-
 
 array<Entry> entries = args.trade_library_args.entry_array
 if entries.size() > 0 
     for i = entries.size() - 1 to 0 
         FinalStrategy_process_entry(entries.get(i))
 
-
-
-remove_all_finished_trades(args.trade_library_args)
-
-
-	
 
 
 
