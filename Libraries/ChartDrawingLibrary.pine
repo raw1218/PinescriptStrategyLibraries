@@ -188,17 +188,13 @@ ChartDrawingLibrary_createChartDrawingBox(ChartDrawingArgs args, float top_price
 
 	my_box //return the box 
 
-ChartDrawingLibrary_createChartDrawingLabel(ChartDrawingArgs args, string label_text, int bar_index_x, float price_y, color label_color) =>
+ChartDrawingLibrary_createChartDrawingLabel(ChartDrawingArgs args, string label_text, int bar_index_x, float price_y, color label_color = na) =>
 	ChartDrawingLabel my_label = ChartDrawingLabel.new()
 	my_label.bar_index_x := bar_index_x 
 	my_label.price_y := price_y 
 	my_label.label_color := label_color 
 	my_label.label_text := label_text 
 	my_label 
-
-
-ChartDrawingLibrary_createChartDrawingItem(ChartDrawingArgs args, ChartDrawingBox chart_box = na, ChartDrawingLabel chart_label = na)
-	ChartDrawingItem
 
 
 
