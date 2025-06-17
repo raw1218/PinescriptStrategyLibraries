@@ -45,6 +45,10 @@ type ChartDrawingGroup
 
 type ChartDrawingArgs
 	array<ChartDrawingGroup> groups = na
+ChartDrawingLibrary_createChartDrawingArgs() =>
+	ChartDrawingArgs args = ChartDrawingArgs.new() 
+	args.groups := array.new<ChartDrawingArgs>()
+	args
 
 helper_getChartDrawingGroupByName(ChartDrawingArgs args, string group_name) =>
 	ChartDrawingGroup result = na 
@@ -110,6 +114,12 @@ ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string i
          top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
 	
 	
+helper_ChartDrawingLibrary_addFinishedDrawing(ChartDrawingArgs args, ChartDrawingItem item, ChartDrawingGroup group) =>
+	group.finished_drawings.push(item)
+	//check if above max 
+	if group.finished_drawings.size() > group.max_boxes_in_group
+		group.finished_drawings.remove(0)//remove first item
+
 //returns 0 on success, 1 on error
 ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string item_name) => 
 	int return_code = 0
@@ -120,13 +130,14 @@ ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string i
 		item := helper_getCurrentChartDrawingItemByName(args, group, item_name)
 	if not na(item)
 		//assumes the box is already drawn 
-		group.finished_drawings.push(item)
 		helper_removeCurrentChartDrawingItemByName(args, group, item.name)
+		helper_ChartDrawingLibrary_addFinishedDrawing(args = args, item = item, group = group)
 		return_code := 0
 	else
 		//we should not reach here this is an error
 		return_code := 1
 	return_code 
+
 
 
 ChartDrawingLibrary_CancelDrawing(ChartDrawingArgs args, string group_name, string item_name) => 
@@ -217,6 +228,12 @@ stringify_EntryState(EntryState s) =>
     result
 
 
+type EntryDebugData
+    bool should_draw = false //draw with the debugger
+    bool is_drawn_on_screen = false
+    string drawing_group_name = na 
+    string drawing_item_name = na
+    bool drawing_finished = false
 // === ENTRY STRUCTURE ===
 type EntryAdditionalData
     int placed_on_index = 0
@@ -224,7 +241,13 @@ type EntryAdditionalData
     int invalidated_on_index = 0 
     int lost_on_index = 0
     int won_on_index = 0
+
     string trade_id = na //for strategy tester 
+    EntryDebugData debug_data = na
+helper_createEntryAdditionalData() => 
+    EntryAdditionalData additional_data = EntryAdditionalData.new()
+    additional_data.debug_data := EntryDebugData.new()
+    additional_data
 // Represents a single trade
 type Entry
     Direction dir              // Trade direction
@@ -251,6 +274,7 @@ stringify_Entry(Entry e) =>
     result
 
 
+
 calculate_RR_ratio_based_on_prices(float entry_price, float stop_loss_price, float target_price) =>
     float distance = entry_price - stop_loss_price 
     float distance_to_target = target_price - entry_price
@@ -265,34 +289,29 @@ calculate_target_based_on_RR_ratio(float entry_price, float stop_loss_price, flo
 
 
 // Creates a new Entry instance with default state
-create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
-    Entry my_entry = Entry.new()
-    my_entry.dir := dir
-    my_entry.orderType := orderType
+helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, int index) =>
+    Entry my_entry = Entry.new() 
+    my_entry.dir := dir 
+    my_entry.orderType := orderType 
     my_entry.entryPrice := entryPrice
     my_entry.stopLossPrice := stopLossPrice
-    my_entry.targetPrice := targetPrice
     my_entry.state := EntryState.Placed
-    my_entry.num_shares := 1
-    my_entry.index := index 
-    my_entry.additional_data:= EntryAdditionalData.new()
-    my_entry.additional_data.placed_on_index := index 
+    my_entry.num_shares := 1 
+    my_entry.index := index
+    my_entry.additional_data := helper_createEntryAdditionalData
+    my_entry.placed_on_index := bar_index 
+
+
+create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
+    Entry my_entry = helper_createEntry(dir = dir, orderType = orderType, entryPrice = entryPrice, stopLossPrice = stopLossPrice, index = index)
+    my_entry.targetPrice := targetPrice
     //calculate RR
     my_entry.risk_reward_ratio := calculate_RR_ratio_based_on_prices(entryPrice, stopLossPrice, targetPrice)
     my_entry
 
 create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetRR, int index) =>
-    Entry my_entry = Entry.new()
-    my_entry.dir := dir
-    my_entry.orderType := orderType
-    my_entry.entryPrice := entryPrice
-    my_entry.stopLossPrice := stopLossPrice
+    Entry my_entry = helper_createEntry(dir = dir, orderType = orderType, entryPrice = entryPrice, stopLossPrice = stopLossPrice, index = index)
     my_entry.risk_reward_ratio := targetRR
-    my_entry.state := EntryState.Placed
-    my_entry.num_shares := 1
-    my_entry.index := index 
-    my_entry.additional_data:= EntryAdditionalData.new()
-    my_entry.additional_data.placed_on_index := index 
     //calculate RR
     my_entry.targetPrice := calculate_target_based_on_RR_ratio(entryPrice,stopLossPrice,targetRR)
     my_entry
@@ -330,7 +349,20 @@ stringify_InstrumentInfo(InstrumentInfo info) =>
     my_string += "\tUSD_made_per_tick = " + str.tostring(info.USD_made_per_tick)
     my_string
 
-
+type TradeLibraryDebuggingInfo
+    bool enable_debugging = true
+    ChartDrawingArgs chart_drawing_library_args = na 
+    string group_name = "TradeLibraryEntries"
+    color winning_trade_color = color.green
+    color losing_trade_color = color.red 
+    color border_color_in_progress = color.blue
+    color border_color_finished = color.black
+helper_createTradeLibraryDebuggingInfo()=>
+    TradeLibraryDebuggingInfo debugger = TradeLibraryDebuggingInfo.new()
+    debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
+    debugger
+    
+    
 type TradeLibraryArgsParameters
     bool pyramiding_allowed = false 
 // A container to manage multiple entries (i.e. a portfolio of trades)
@@ -339,7 +371,8 @@ type TradeLibraryArgs
     array<Entry> entry_array = na
     TradeDataCollector data_collector = na
     InstrumentInfo instrument_info = na
-    bool something_has_changed = false 
+    bool something_has_changed = false
+    TradeLibraryDebuggingInfo debugger = na
 
 // Initializes a new TradeLibraryArgs instance with an empty trade array
 create_TradeLibraryArgs() =>
@@ -348,6 +381,7 @@ create_TradeLibraryArgs() =>
     args.data_collector := TradeDataCollector.new()
     args.instrument_info := create_InstrumentInfo()
     args.parameters := TradeLibraryArgsParameters.new()
+    args.debugger := helper_createTradeLibraryDebuggingInfo()
     args
 
 
@@ -432,6 +466,79 @@ process_trade_win(TradeLibraryArgs args, Entry entry) =>
     args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
 
 
+//sets the group and item names 
+helper_TradeManagerLibraryDebugger_setEntryDrawingNames(TradeLibraryArgs args, Entry entry) =>
+    entry.additional_data.drawing_group_name := args.debugger.group_name
+    entry.additional_data.drawing_item_name := stringify_Entry(entry)
+
+//this is the only function that reads or writes the entries debugging info
+TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry entry) =>
+    EntryDebugData entry_debug_info = entry.additional_data.debug_data
+    //finish the drawing if we just won or lost the trade
+    bool should_finish_drawing = (entry.state == EntryState.Success) or (entry.state == EntryState.Loss)
+    should_finish_drawing := should_finish_drawing and (not entry_debug_info.drawing_finished) 
+    //cancel the drawing if the entry got invalidated
+    bool should_cancel_drawing = (entry.state == EntryState.Invalidated)
+    //update drawing if we are mid trade or if we just placed the trade
+    bool should_update_drawing = (entry.state == EntryState.Entered) or 
+        ((entry.state == EntryState.Placed) and not entry_debug_info.is_drawn_on_screen)
+    //set the debugging drawing group and item names 
+    if na(entry.additional_data.drawing_item_name)
+            helper_TradeManagerLibraryDebugger_setEntryDrawingNames(args, entry)
+    string drawing_group_name = entry.additional_data.debug_data.drawing_group_name
+    string drawing_item_name = entry.additional_data.debug_data.drawing_item_name
+    ChartDrawingArgs chart_drawing_library_args = args.debugger.chart_drawing_library_args
+    // cancel drawing
+    if should_cancel_drawing
+        ChartDrawingLibrary_CancelDrawing(chart_drawing_library_args, drawing_group_name, drawing_item_name)
+    // update drawing (update one last time if finished)
+    if should_update_drawing or should_finish_drawing
+        //determine the box boundaries and colors 
+        bool is_winning = false 
+        bool is_trade_open = false 
+        bool is_long = entry.direction == Direction.Long 
+        bool is_short = entry.direction == Direction.Short
+        float current_price = close
+        int left_bar_index = entry.index 
+        int right_index = 0 
+        float top_price = math.max(entry.target_price, entry.stop_loss_price)
+        float bottom_price = math.min(entry.target_price, entry.stop_loss_price)
+        if entry.state == EntryState.Success
+            is_winning := true 
+            is_trade_open := false 
+            right_index := entry.additional_data.won_on_index
+        else if entry.state == EntryState.Loss 
+            is_winning := false 
+            is_trade_open := false 
+            right_index := entry.additional_data.lost_on_index
+        else if (entry.state == EntryState.Entered) or (entry.state == EntryState.Placed)
+            is_winning := (is_long and current_price > entry.entry_price) or (is_short and current_price < entry.entry_price)
+            is_trade_open := true 
+            right_index := bar_index + 1
+            top_price = math.max(entry.entry_price, current_price)
+            bottom_price = math.max(entry.entry_price, current_price)
+        Color box_color = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+        Color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
+        //create and update the box 
+        ChartDrawingBox chart_box = ChartDrawingLibrary_createChartDrawingBox(chart_drawing_library_args, top_price, bottom_price, left_bar_index, right_bar_index, box_color, border_color)
+        ChartDrawingLibrary_UpdateBox(chart_drawing_library_args, drawing_group_name, drawing_item_name, chart_box)
+        entry_debug_info.is_drawn_on_screen := true 
+
+    //Mark as finished if applicable
+    if should_finish_drawing
+        ChartDrawingLibrary_FinishBox(chart_drawing_library_args, drawing_group_name, drawing_item_name)
+        entry_debug_info.drawing_finished := true
+
+
+TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
+    if args.entry_array.size() > 0
+        for i = args.entry_array.size() - 1 to 0
+            Entry current_entry = args.entry_array.get(i)
+            TradeManagerLibraryDebugger_processAndDrawEntry(args, current_entry)
+    
+        
+
+
 // Checks a single candle (high/low) against a single entry and updates its state
 TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
     //ignore if this is the same index
@@ -455,12 +562,6 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
                 process_trade_win(args, entry)
 
 
-
- 
-
-
-
-
 // Loops over all trades and processes them using the current candle's high/low
 TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
     args.something_has_changed := false 
@@ -468,6 +569,9 @@ TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
         for i = args.entry_array.size() - 1 to 0
             Entry current_entry = args.entry_array.get(i)
             TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
+    //optional debugging / drawing 
+    if args.debugger.enable_debugging
+        TradeManagerLibraryDebugger_processCandle(args)
 
 // Removes trades that are no longer active (Invalidated, Success, or Loss)
 remove_all_finished_trades(TradeLibraryArgs args) =>
