@@ -273,7 +273,7 @@ type EntryDebugData
     string drawing_group_name = na 
     string drawing_item_name = na
     bool drawing_finished = false
-    float transparency_level = 0.5 // 1 = fully transparent, 0 = fully colored 
+    float transparency_level = 75 // 100 = fully transparent, 0 = fully colored 
 // === ENTRY STRUCTURE ===
 type EntryAdditionalData
     int placed_on_index = 0
@@ -561,12 +561,18 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
             is_winning := false 
             is_trade_open := false 
             right_bar_index := entry.additional_data.lost_on_index
-        else if (entry.state == EntryState.Entered) or (entry.state == EntryState.Placed)
+        else if entry.state == EntryState.Entered
             is_winning := (is_long and current_price > entry.entryPrice) or (is_short and current_price < entry.entryPrice)
             is_trade_open := true 
-            right_bar_index := bar_index + 1
+            right_bar_index := bar_index
             top_price := math.max(entry.entryPrice, current_price)
-            bottom_price := math.max(entry.entryPrice, current_price)
+            bottom_price := math.min(entry.entryPrice, current_price)
+        else if entry.state == EntryState.Placed 
+            is_trade_open := true 
+            right_bar_index := bar_index 
+            left_bar_index := bar_index - 1
+            top_price := math.max(entry.entryPrice, entry.stopLossPrice)
+            bottom_price := math.min(entry.entryPrice, entry.stopLossPrice) 
         color box_color_base = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
         color box_color = color.new(box_color_base, entry_debug_info.transparency_level)
         color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
