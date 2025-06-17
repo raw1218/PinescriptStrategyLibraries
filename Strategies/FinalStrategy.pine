@@ -144,6 +144,7 @@ EntryStrategyLibrary_process_candle(args)
 
 //print out the trades in the trade library 
 bool should_print = args.trade_library_args.something_has_changed or barstate.islast
+should_print := false
 string my_text = ""
 if should_print
     my_text := stringify_all_trades(args.trade_library_args)

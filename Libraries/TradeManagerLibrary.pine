@@ -55,6 +55,7 @@ type EntryDebugData
     string drawing_group_name = na 
     string drawing_item_name = na
     bool drawing_finished = false
+    float transparency_level = 0.5 // 1 = fully transparent, 0 = fully colored 
 // === ENTRY STRUCTURE ===
 type EntryAdditionalData
     int placed_on_index = 0
@@ -338,7 +339,8 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
             right_bar_index := bar_index + 1
             top_price := math.max(entry.entryPrice, current_price)
             bottom_price := math.max(entry.entryPrice, current_price)
-        color box_color = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+        color box_color_base = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+        color box_color = color.new(box_color_base, entry_debug_info.transparency_level)
         color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
         //create and update the box 
         ChartDrawingBox chart_box = ChartDrawingLibrary_createChartDrawingBox(chart_drawing_library_args, top_price, bottom_price, left_bar_index, right_bar_index, box_color, border_color)
