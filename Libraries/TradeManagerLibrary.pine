@@ -180,6 +180,7 @@ type TradeLibraryDebuggingInfo
     color losing_trade_color = color.red 
     color border_color_in_progress = color.blue
     color border_color_finished = color.black
+    bool print_active_trades_when_something_changes = true 
 helper_createTradeLibraryDebuggingInfo()=>
     TradeLibraryDebuggingInfo debugger = TradeLibraryDebuggingInfo.new()
     debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
@@ -207,6 +208,15 @@ create_TradeLibraryArgs() =>
     args.debugger := helper_createTradeLibraryDebuggingInfo()
     args
 
+stringify_all_trades(TradeLibraryArgs args) =>
+    string my_text = na
+    array<Entry> entries = args.entry_array 
+    if entries.size() > 0 
+        my_text := ""
+        for i = entries.size() - 1 to 0 
+            Entry entry = entries.get(i)
+            my_text += stringify_Entry(entry) + "\n"
+    my_text 
 
 is_long_already_open(TradeLibraryArgs args) =>
     bool already_open = false 
@@ -344,7 +354,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
         //create and update the box 
         ChartDrawingBox chart_box = ChartDrawingLibrary_createChartDrawingBox(chart_drawing_library_args, top_price, bottom_price, left_bar_index, right_bar_index, box_color, border_color)
-        ChartDrawingLibrary_UpdateBox(chart_drawing_library_args, drawing_group_name, drawing_item_name, chart_box)
+        ChartDrawingLibrary_UpdateBox(chart_drawing_library_args, drawing_group_name, drawing_item_name, chart_box = chart_box)
         entry_debug_info.is_drawn_on_screen := true 
 
     //Mark as finished if applicable
@@ -354,10 +364,23 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
 
 
 TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
+    //draw the trades 
     if args.entry_array.size() > 0
         for i = args.entry_array.size() - 1 to 0
             Entry current_entry = args.entry_array.get(i)
             TradeManagerLibraryDebugger_processAndDrawEntry(args, current_entry)
+
+    //print a label of all trade states if something changes  
+    if args.debugger.print_active_trades_when_something_changes
+        if args.something_has_changed
+            string label_text = stringify_all_trades(args)
+            string label_id = label_text + str.tostring(time)
+            ChartDrawingLabel chart_label = ChartDrawingLibrary_createChartDrawingLabel(args = args.debugger.chart_drawing_library_args,
+                label_text = label_text, bar_index_x = bar_index, price_y = high) 
+            ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, 
+                group_name = args.debugger.group_name, item_name = label_id, chart_label = chart_label)
+            ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, 
+                group_name = args.debugger.group_name, item_name = label_id)
     
         
 
@@ -411,13 +434,5 @@ remove_all_finished_trades(TradeLibraryArgs args) =>
             if finished
                 args.entry_array.remove(i)
 
-stringify_all_trades(TradeLibraryArgs args) =>
-    string my_text = na
-    array<Entry> entries = args.entry_array 
-    if entries.size() > 0 
-        my_text := ""
-        for i = entries.size() - 1 to 0 
-            Entry entry = entries.get(i)
-            my_text += stringify_Entry(entry) + "\n"
-    my_text 
+
         

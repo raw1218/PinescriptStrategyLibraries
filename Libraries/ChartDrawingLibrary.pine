@@ -14,9 +14,18 @@ type ChartDrawingBox
 	color border_color = na
 	box tv_box_item = na
 
+type ChartDrawingLabel
+	int bar_index_x = na 
+	float price_y = na 
+	color label_color = na
+	string label_text = na
+	label tv_label_item = na 
+	
+
 type ChartDrawingItem
 	string name = na
 	ChartDrawingBox chart_box = na
+	ChartDrawingLabel chart_label = na
 
 
 type ChartDrawingGroup
@@ -76,8 +85,33 @@ helper_removeCurrentChartDrawingItemByName(ChartDrawingArgs args, ChartDrawingGr
 				group.current_drawings.remove(i)
 				break //assumes no duplicates
 
+helper_undrawChartDrawingItem(ChartDrawingArgs args, ChartDrawingItem item) =>
+	//check for chart box 
+	if not na(item.chart_box)
+		if not na(item.chart_box.tv_box_item)
+			item.chart_box.tv_box_item.delete()
+			item.chart_box.tv_box_item := na 
+	//check for labels 
+	if not na(item.chart_label)
+		if not na(item.chart_label.tv_label_item)
+			item.chart_label.tv_label_item.delete()
+			item.chart_label.tv_label_item := na 
 
-ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string item_name, ChartDrawingBox chart_box) => 
+helper_drawChartDrawingItem(ChartDrawingArgs args, ChartDrawingItem item) =>
+	//chart box 
+	if not na(item.chart_box)
+		ChartDrawingBox chart_box = item.chart_box
+		if na(chart_box.tv_box_item)
+			chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
+         		top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
+
+	if not na(item.chart_label)
+		ChartDrawingLabel chart_label = item.chart_label
+		if na(chart_label.tv_label_item)
+			chart_label.tv_label_item := label.new(x = chart_label.bar_index_x, y = chart_label.price_y, text = chart_label.label_text)	
+
+
+ChartDrawingLibrary_UpdateDrawing(ChartDrawingArgs args, string group_name, string item_name, ChartDrawingBox chart_box = na, ChartDrawingLabel chart_label = na) => 
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
 	// add the group if it doesn't already exist
 	if na(group)
@@ -89,15 +123,15 @@ ChartDrawingLibrary_UpdateBox(ChartDrawingArgs args, string group_name, string i
 		item := helper_createAndAdd_ChartDrawingItem(args, group, item_name)
 		
 	//undraw the previous drawing before we draw the new one 
-	if not na(item.chart_box)
-		if not na(item.chart_box.tv_box_item)
-			item.chart_box.tv_box_item.delete()
-	
-	//draw the new box
+	helper_undrawChartDrawingItem(args, item)
+
+	//update the new parts of the drawing 
 	item.chart_box := chart_box 
-	item.chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
-         top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
-	
+	item.chart_label := chart_label
+
+	//draw the new box
+	helper_drawChartDrawingItem(args, item)
+
 	
 helper_ChartDrawingLibrary_addFinishedDrawing(ChartDrawingArgs args, ChartDrawingItem item, ChartDrawingGroup group) =>
 	group.finished_drawings.push(item)
@@ -106,7 +140,7 @@ helper_ChartDrawingLibrary_addFinishedDrawing(ChartDrawingArgs args, ChartDrawin
 		group.finished_drawings.remove(0)//remove first item
 
 //returns 0 on success, 1 on error
-ChartDrawingLibrary_FinishBox(ChartDrawingArgs args, string group_name, string item_name) => 
+ChartDrawingLibrary_FinishDrawing(ChartDrawingArgs args, string group_name, string item_name) => 
 	int return_code = 0
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)
 	ChartDrawingItem item = na
@@ -154,8 +188,17 @@ ChartDrawingLibrary_createChartDrawingBox(ChartDrawingArgs args, float top_price
 
 	my_box //return the box 
 
+ChartDrawingLibrary_createChartDrawingLabel(ChartDrawingArgs args, string label_text, int bar_index_x, float price_y, color label_color) =>
+	ChartDrawingLabel my_label = ChartDrawingLabel.new()
+	my_label.bar_index_x := bar_index_x 
+	my_label.price_y := price_y 
+	my_label.label_color := label_color 
+	my_label.label_text := label_text 
+	my_label 
 
 
+ChartDrawingLibrary_createChartDrawingItem(ChartDrawingArgs args, ChartDrawingBox chart_box = na, ChartDrawingLabel chart_label = na)
+	ChartDrawingItem
 
 
 
