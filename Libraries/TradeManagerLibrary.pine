@@ -119,8 +119,9 @@ helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float s
     my_entry.state := EntryState.Placed
     my_entry.num_shares := 1 
     my_entry.index := index
-    my_entry.additional_data := helper_createEntryAdditionalData
-    my_entry.placed_on_index := bar_index 
+    my_entry.additional_data := helper_createEntryAdditionalData()
+    my_entry.additional_data.placed_on_index := bar_index 
+    my_entry
 
 
 create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
@@ -289,8 +290,8 @@ process_trade_win(TradeLibraryArgs args, Entry entry) =>
 
 //sets the group and item names 
 helper_TradeManagerLibraryDebugger_setEntryDrawingNames(TradeLibraryArgs args, Entry entry) =>
-    entry.additional_data.drawing_group_name := args.debugger.group_name
-    entry.additional_data.drawing_item_name := stringify_Entry(entry)
+    entry.additional_data.debug_data.drawing_group_name := args.debugger.group_name
+    entry.additional_data.debug_data.drawing_item_name := stringify_Entry(entry)
 
 //this is the only function that reads or writes the entries debugging info
 TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry entry) =>
@@ -301,11 +302,10 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
     //cancel the drawing if the entry got invalidated
     bool should_cancel_drawing = (entry.state == EntryState.Invalidated)
     //update drawing if we are mid trade or if we just placed the trade
-    bool should_update_drawing = (entry.state == EntryState.Entered) or 
-        ((entry.state == EntryState.Placed) and not entry_debug_info.is_drawn_on_screen)
+    bool should_update_drawing = (entry.state == EntryState.Entered) or ((entry.state == EntryState.Placed) and not entry_debug_info.is_drawn_on_screen)
     //set the debugging drawing group and item names 
-    if na(entry.additional_data.drawing_item_name)
-            helper_TradeManagerLibraryDebugger_setEntryDrawingNames(args, entry)
+    if na(entry.additional_data.debug_data.drawing_item_name)
+        helper_TradeManagerLibraryDebugger_setEntryDrawingNames(args, entry)
     string drawing_group_name = entry.additional_data.debug_data.drawing_group_name
     string drawing_item_name = entry.additional_data.debug_data.drawing_item_name
     ChartDrawingArgs chart_drawing_library_args = args.debugger.chart_drawing_library_args
@@ -317,29 +317,29 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         //determine the box boundaries and colors 
         bool is_winning = false 
         bool is_trade_open = false 
-        bool is_long = entry.direction == Direction.Long 
-        bool is_short = entry.direction == Direction.Short
+        bool is_long = entry.dir == Direction.Long 
+        bool is_short = entry.dir == Direction.Short
         float current_price = close
         int left_bar_index = entry.index 
-        int right_index = 0 
-        float top_price = math.max(entry.target_price, entry.stop_loss_price)
-        float bottom_price = math.min(entry.target_price, entry.stop_loss_price)
+        int right_bar_index = 0 
+        float top_price = math.max(entry.targetPrice, entry.stopLossPrice)
+        float bottom_price = math.min(entry.targetPrice, entry.stopLossPrice)
         if entry.state == EntryState.Success
             is_winning := true 
             is_trade_open := false 
-            right_index := entry.additional_data.won_on_index
+            right_bar_index := entry.additional_data.won_on_index
         else if entry.state == EntryState.Loss 
             is_winning := false 
             is_trade_open := false 
-            right_index := entry.additional_data.lost_on_index
+            right_bar_index := entry.additional_data.lost_on_index
         else if (entry.state == EntryState.Entered) or (entry.state == EntryState.Placed)
-            is_winning := (is_long and current_price > entry.entry_price) or (is_short and current_price < entry.entry_price)
+            is_winning := (is_long and current_price > entry.entryPrice) or (is_short and current_price < entry.entryPrice)
             is_trade_open := true 
-            right_index := bar_index + 1
-            top_price = math.max(entry.entry_price, current_price)
-            bottom_price = math.max(entry.entry_price, current_price)
-        Color box_color = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
-        Color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
+            right_bar_index := bar_index + 1
+            top_price := math.max(entry.entryPrice, current_price)
+            bottom_price := math.max(entry.entryPrice, current_price)
+        color box_color = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+        color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
         //create and update the box 
         ChartDrawingBox chart_box = ChartDrawingLibrary_createChartDrawingBox(chart_drawing_library_args, top_price, bottom_price, left_bar_index, right_bar_index, box_color, border_color)
         ChartDrawingLibrary_UpdateBox(chart_drawing_library_args, drawing_group_name, drawing_item_name, chart_box)

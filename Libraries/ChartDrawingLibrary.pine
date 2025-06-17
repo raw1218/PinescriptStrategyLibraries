@@ -32,7 +32,7 @@ type ChartDrawingArgs
 	array<ChartDrawingGroup> groups = na
 ChartDrawingLibrary_createChartDrawingArgs() =>
 	ChartDrawingArgs args = ChartDrawingArgs.new() 
-	args.groups := array.new<ChartDrawingArgs>()
+	args.groups := array.new<ChartDrawingGroup>()
 	args
 
 helper_getChartDrawingGroupByName(ChartDrawingArgs args, string group_name) =>
