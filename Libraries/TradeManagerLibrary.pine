@@ -433,11 +433,10 @@ helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args,
     //assumes entry.state = Placed
     if not trade_exit_info.is_currently_break_even
         int num_candles_past_entry = bar_index - entry.additional_data.entered_on_index 
-        bool should_be_breakeven = trade_exit_info.breakeven_on_n >= num_candles_past_entry
+        bool should_be_breakeven = trade_exit_info.breakeven_on_n == num_candles_past_entry
         if should_be_breakeven
             trade_exit_info.is_currently_break_even := true
             entry.additional_data.original_stopLossPrice := entry.stopLossPrice
-            //move stoploss to entry 
             entry.stopLossPrice := entry.entryPrice 
 
 
