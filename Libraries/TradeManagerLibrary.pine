@@ -426,6 +426,7 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
         
 //assumes that entry has breakeven set to true (make sure before function is called )
 helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args, Entry entry) =>
+    label.new(text = "in processCandleForEntryBreakeven", x = bar_index, y = high)
     TradeExitInfo trade_exit_info = entry.trade_exit_info 
     //assumes entry.trade_exit_info.break_even = true 
     //assumes entry.state = Placed

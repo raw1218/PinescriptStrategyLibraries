@@ -1,0 +1,25 @@
+
+Time to add key levels. 
+Lets keep track of the key levels and their names. They can be updated.
+Lets make its own library. 
+
+How will it work. 
+Each key level just has its own name and stuff. 
+
+Lets first implement only taking a trade if it touches a key level. 
+
+Now lets add another type of trade, taking profit when it hits a key level. 
+Need to add some logic to the strategy entyr library to not take a set R. To Take a Variable R. 
+
+Whats the best way to do this. Need a way to set the RR of the rule at each candle. 
+Ideally will use a Risk Reward library? 
+
+Can have an entry type that just says take nearest key level, but want to generalize and be able to just honestly pass in the RR (or target)
+
+Forget about mantaining a separate library. 
+Lets just think about the best way to update the target of a trade. 
+
+Okay I added Exit Actions to the library, now implement the actual strategy:
+
+    On a key level = 1R. 
+    To a key level = that many R. 
