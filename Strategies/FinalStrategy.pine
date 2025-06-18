@@ -79,6 +79,7 @@ update_simple_condition(args,touching_sma_condition_name, KeyLevelLibrary_isPric
 // Rules Taking Entries touching Key Levels For 1R
 var exit_action_1R_name = "Exit at 1R"
 var ExitAction exit_action_1R = create_and_add_ExitAction(args, exit_action_1R_name, EXIT_ACTION_TYPE.SetRiskRewardRatio, 1)
+var rc = EntryStrategyLibrary_updateExitActionBreakeven(args, exit_action_1R_name, breakeven = true, breakeven_on_n = 1)
 
 var string red_up_1r_rule_name = "Red_Up_Candle_Touching_Key_Level_1R_Rule"
 var string green_down_1r_rule_name = "Green_Down_Candle_Touching_Key_Level_1R_Rule"

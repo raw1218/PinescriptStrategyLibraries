@@ -34,6 +34,7 @@ enum EntryState
     Invalidated    // Stopped before entry (e.g. stop hit first)
     Success        // Target hit
     Loss           // Stop loss hit
+    Breakeven      // got stopped out at breakeven
 stringify_EntryState(EntryState s) =>
     string result = ""
     if s == EntryState.Placed
@@ -46,6 +47,8 @@ stringify_EntryState(EntryState s) =>
         result := "Success"
     else if s == EntryState.Loss
         result := "Loss"
+    else if s == EntryState.breakeven
+        result := "Breakeven"
     result
 
 
@@ -63,6 +66,7 @@ type EntryAdditionalData
     int invalidated_on_index = 0 
     int lost_on_index = 0
     int won_on_index = 0
+    int breakeven_on_index = 0
 
     string trade_id = na //for strategy tester 
     EntryDebugData debug_data = na
@@ -70,6 +74,10 @@ helper_createEntryAdditionalData() =>
     EntryAdditionalData additional_data = EntryAdditionalData.new()
     additional_data.debug_data := EntryDebugData.new()
     additional_data
+type TradeExitInfo 
+    bool will_break_even = false
+    bool is_currently_break_even = false
+    int breakeven_on_n = 1 //break even on the n'th candle after entry, only 1 and higher is currently supported, any other value is considered break_even disabled
 // Represents a single trade
 type Entry
     Direction dir              // Trade direction
@@ -82,6 +90,7 @@ type Entry
     int num_shares             // Optional: share/contract size (default = 1)
     int index                  // bar index (needed to not process the hitting of the stop loss on the actual entry candle)
     EntryAdditionalData additional_data
+    TradeExitInfo trade_exit_info
 
 stringify_Entry(Entry e) =>
     string result = "ENTRY (index = " + str.tostring(e.index) + " )\n"
@@ -122,7 +131,12 @@ helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float s
     my_entry.index := index
     my_entry.additional_data := helper_createEntryAdditionalData()
     my_entry.additional_data.placed_on_index := bar_index 
+    my_entry.trade_exit_info := TradeExitInfo.new()
     my_entry
+
+TradeManagerLibrary_setEntryBreakeven(TradeLibraryArgs args, Entry entry, int breakeven_on_n) =>
+    entry.trade_exit_info.break_even := true 
+    entry.trade_exit_info.breakeven_on_n := breakeven_on_n
 
 
 create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
@@ -146,6 +160,7 @@ type TradeDataCollector
     int num_trades_entered = 0
     int num_trades_won = 0 
     int num_trades_lost = 0
+    int num_trades_breakeven = 0
     float total_profit_USD = 0 
     float total_profit_R = 0
 stringify_TradeDataCollector(TradeDataCollector data) =>
@@ -178,6 +193,7 @@ type TradeLibraryDebuggingInfo
     string group_name = "TradeLibraryEntries"
     color winning_trade_color = color.green
     color losing_trade_color = color.red 
+    color breakeven_trade_color = color.blue
     color border_color_in_progress = color.blue
     color border_color_finished = color.black
     bool print_active_trades_when_something_changes = true 
@@ -282,13 +298,23 @@ process_trade_invalidated(TradeLibraryArgs args, Entry entry) =>
     entry.additional_data.invalidated_on_index := bar_index
     args.something_has_changed := true
 
-process_trade_loss(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Loss
-    args.data_collector.total_profit_R -= 1
-    args.data_collector.num_trades_lost += 1
-    entry.additional_data.lost_on_index := bar_index
+helper_TradeManagerLibrary_processTradeBreakeven(TradeLibraryArgs args, Entry entry) =>
+    entry.state := EntryState.Breakeven
+    args.data_collector.num_trades_breakeven += 1
+    entry.additional_data.breakeven_on_index := bar_index 
     args.something_has_changed := true 
-    args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
+
+//call when price hits stoploss (breakeven, or true stoploss)
+helper_TradeManagerLibrary_processTradeStopLoss(TradeLibraryArgs args, Entry entry) =>
+    if entry.trade_exit_info.is_currently_break_even and (entry.entryPrice == entry.stopLossPrice)
+        helper_TradeManagerLibrary_processTradeBreakeven(args, entry)
+    else
+        entry.state := EntryState.Loss
+        args.data_collector.total_profit_R -= 1
+        args.data_collector.num_trades_lost += 1
+        entry.additional_data.lost_on_index := bar_index
+        args.something_has_changed := true 
+        args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
 
 process_trade_win(TradeLibraryArgs args, Entry entry) =>
     entry.state := EntryState.Success
@@ -308,7 +334,7 @@ helper_TradeManagerLibraryDebugger_setEntryDrawingNames(TradeLibraryArgs args, E
 TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry entry) =>
     EntryDebugData entry_debug_info = entry.additional_data.debug_data
     //finish the drawing if we just won or lost the trade
-    bool should_finish_drawing = (entry.state == EntryState.Success) or (entry.state == EntryState.Loss)
+    bool should_finish_drawing = (entry.state == EntryState.Success) or (entry.state == EntryState.Loss) or (entry.state == EntryState.Breakeven)
     should_finish_drawing := should_finish_drawing and (not entry_debug_info.drawing_finished) 
     //cancel the drawing if the entry got invalidated
     bool should_cancel_drawing = (entry.state == EntryState.Invalidated)
@@ -328,6 +354,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         //determine the box boundaries and colors 
         bool is_winning = false 
         bool is_trade_open = false 
+        bool is_breakeven = false 
         bool is_long = entry.dir == Direction.Long 
         bool is_short = entry.dir == Direction.Short
         float current_price = close
@@ -335,6 +362,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         int right_bar_index = 0 
         float top_price = math.max(entry.targetPrice, entry.stopLossPrice)
         float bottom_price = math.min(entry.targetPrice, entry.stopLossPrice)
+        color box_color_base = na
         if entry.state == EntryState.Success
             is_winning := true 
             is_trade_open := false 
@@ -351,11 +379,18 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
             bottom_price := math.min(entry.entryPrice, current_price)
         else if entry.state == EntryState.Placed 
             is_trade_open := true 
-            right_bar_index := bar_index 
-            left_bar_index := bar_index - 1
+            right_bar_index := bar_index + 1
             top_price := math.max(entry.entryPrice, entry.stopLossPrice)
             bottom_price := math.min(entry.entryPrice, entry.stopLossPrice) 
-        color box_color_base = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+        else if entry.state == EntryState.Breakeven 
+            is_trade_open := false 
+            right_bar_index := bar_index 
+            top_price := math.max(entry.entryPrice, entry.stopLossPrice)
+            bottom_price := math.min(entry.entryPrice, entry.stopLossPrice)
+            box_color_base := args.debugger.breakeven_trade_color
+        
+        if na(box_color_base)
+            box_color_base = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
         color box_color = color.new(box_color_base, entry_debug_info.transparency_level)
         color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
         //create and update the box 
@@ -386,6 +421,21 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
             ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args,group_name = args.debugger.group_name, item_name = label_id)
     
         
+//assumes that entry has breakeven set to true (make sure before function is called )
+helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args, Entry entry) =>
+    TradeExitInfo trade_exit_info = entry.trade_exit_info 
+    //assumes entry.trade_exit_info.break_even = true 
+    //assumes entry.state = Placed
+    if not trade_exit_info.is_currently_break_even
+        int num_candles_past_entry = bar_index - entry.additional_data.entered_on_index 
+        bool should_be_breakeven = trade_exit_info.breakeven_on_n >= num_candles_past_entry
+        if should_be_breakeven
+            trade_exit_info.is_currently_break_even := true
+            //move stoploss to entry 
+            entry.stopLossPrice := entry.entryPrice 
+
+
+
 
 
 // Checks a single candle (high/low) against a single entry and updates its state
@@ -405,8 +455,12 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
             else if touchedStop
                 process_trade_invalidated(args, entry)
         if entry.state == EntryState.Entered
+            //first set breakeven if applicable
+            if entry.trade_exit_info.will_break_even and  not entry.trade_exit_info.is_currently_break_even
+                helper_TradeManagerLibrary_processCandleForEntryBreakeven(args, entry)
+            //then see if it touches the target or stoploss
             if touchedStop
-                process_trade_loss(args, entry)
+                helper_TradeManagerLibrary_processTradeStopLoss(args, entry) //handles breakeven case
             else if crossedTarget or completely_passed_target
                 process_trade_win(args, entry)
 
