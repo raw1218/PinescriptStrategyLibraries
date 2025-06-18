@@ -393,7 +393,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
             box_color_base := args.debugger.breakeven_trade_color
         
         if na(box_color_base)
-            box_color_base = is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
+            box_color_base := is_winning ? args.debugger.winning_trade_color : args.debugger.losing_trade_color
         color box_color = color.new(box_color_base, entry_debug_info.transparency_level)
         color border_color = is_trade_open ? args.debugger.border_color_in_progress : args.debugger.border_color_finished
         //create and update the box 
@@ -445,6 +445,12 @@ helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args,
 TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, float candleHigh, float candleLow) =>
     //ignore if this is the same index
     if entry.index != bar_index
+
+        //first set the breakeven if applicable because it can affect stoplosses 
+        if entry.state == EntryState.Entered 
+            if entry.trade_exit_info.will_break_even and  not entry.trade_exit_info.is_currently_break_even
+                helper_TradeManagerLibrary_processCandleForEntryBreakeven(args, entry)
+
         isLong = entry.dir == Direction.Long
         isShort = entry.dir == Direction.Short
         //Todo add worst case assumptions for stop orders vs limit orders
@@ -458,10 +464,6 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
             else if touchedStop
                 process_trade_invalidated(args, entry)
         if entry.state == EntryState.Entered
-            //first set breakeven if applicable
-            if entry.trade_exit_info.will_break_even and  not entry.trade_exit_info.is_currently_break_even
-                helper_TradeManagerLibrary_processCandleForEntryBreakeven(args, entry)
-            //then see if it touches the target or stoploss
             if touchedStop
                 helper_TradeManagerLibrary_processTradeStopLoss(args, entry) //handles breakeven case
             else if crossedTarget or completely_passed_target

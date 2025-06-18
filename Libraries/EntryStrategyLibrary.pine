@@ -199,7 +199,7 @@ EntryStrategyLibrary_updateExitActionBreakeven(EntryLibraryArgs args, string exi
 	int return_value = 0
 	ExitAction exit_action = get_exit_action_by_name(args, exit_action_name)
 	if not na(exit_action)
-		exit_action.trade_exit_info.will_break_even := breakeven 
+		exit_action.trade_exit_info.will_break_even := will_break_even
 		exit_action.trade_exit_info.breakeven_on_n := breakeven_on_n
 	else
 		return_value := -1 
