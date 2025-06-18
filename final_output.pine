@@ -644,6 +644,7 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
         
 //assumes that entry has breakeven set to true (make sure before function is called )
 helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args, Entry entry) =>
+    label.new(text = "in processCandleForEntryBreakeven", x = bar_index, y = high)
     TradeExitInfo trade_exit_info = entry.trade_exit_info 
     //assumes entry.trade_exit_info.break_even = true 
     //assumes entry.state = Placed
@@ -1209,6 +1210,8 @@ create_trade_from_EntryAction_and_ExitAction(EntryAction entry_action, ExitActio
 		float target = exit_action.rr_or_target_value
 		entry := create_Entry_with_target_price(entry_action.trade_direction, entry_action.order_type, entry_price, stop_loss_price, target, candle_index)
 
+	if exit_action.trade_exit_info.will_break_even
+		TradeManagerLibrary_setEntryBreakeven(args.trade_library_args, entry,exit_action.trade_exit_info.breakeven_on_n)
 	entry
 
 take_active_trades(EntryLibraryArgs args) =>
