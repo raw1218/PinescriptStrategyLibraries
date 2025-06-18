@@ -1186,7 +1186,7 @@ EntryStrategyLibrary_updateExitActionBreakeven(EntryLibraryArgs args, string exi
 
 
 // needs to be called on the same candle that the entry is for
-create_trade_from_EntryAction_and_ExitAction(EntryAction entry_action, ExitAction exit_action, int candle_index) =>
+create_trade_from_EntryAction_and_ExitAction(EntryLibraryArgs args, EntryAction entry_action, ExitAction exit_action, int candle_index) =>
 	Entry entry = na 
 	bool is_long = entry_action.trade_direction == Direction.Long 
 	bool is_short = entry_action.trade_direction == Direction.Short
@@ -1220,7 +1220,7 @@ take_active_trades(EntryLibraryArgs args) =>
 		for i = active_actions.size() - 1 to 0 
 			EntryAction current_entry_action = active_actions.get(i).entry_action
 			ExitAction current_exit_action = active_actions.get(i).exit_action
-			Entry entry = create_trade_from_EntryAction_and_ExitAction(current_entry_action, current_exit_action, bar_index)
+			Entry entry = create_trade_from_EntryAction_and_ExitAction(args, current_entry_action, current_exit_action, bar_index)
 			place_trade(args.trade_library_args, entry)
 
 
