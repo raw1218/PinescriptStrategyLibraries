@@ -414,7 +414,9 @@ type TradeLibraryDebuggingInfo
     color breakeven_trade_color = color.blue
     color border_color_in_progress = color.blue
     color border_color_finished = color.black
-    bool print_active_trades_when_something_changes = true 
+
+    bool print_active_trades_when_something_changes = false
+    bool print_trade_data_on_last_bar = true
 helper_createTradeLibraryDebuggingInfo()=>
     TradeLibraryDebuggingInfo debugger = TradeLibraryDebuggingInfo.new()
     debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
@@ -638,12 +640,21 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
     if args.debugger.print_active_trades_when_something_changes
         if args.something_has_changed
             string label_text = stringify_all_trades(args)
-            string label_id = label_text + str.tostring(time)
+            string label_id = "print_active_trades_when_something_changes" + str.tostring(time)
             ChartDrawingLabel chart_label = ChartDrawingLibrary_createChartDrawingLabel(args = args.debugger.chart_drawing_library_args,label_text = label_text, bar_index_x = bar_index, price_y = high) 
             ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args,group_name = args.debugger.group_name, item_name = label_id, chart_label = chart_label)
             ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args,group_name = args.debugger.group_name, item_name = label_id)
     
-        
+    //print the aggregated trade data at the end 
+    if barstate.islast 
+        label = label.new(text = "barstate.islast", x = bar_index, y = high)
+        if args.debugger.print_trade_data_on_last_bar
+            string label_text = stringify_TradeDataCollector(args.data_collector)
+            string label_id = "print_trade_data_on_last_bar" + str.tostring(time)
+            ChartDrawingLabel chart_label = ChartDrawingLibrary_createChartDrawingLabel(args = args.debugger.chart_drawing_library_args,label_text = label_text, bar_index_x = bar_index, price_y = high) 
+            ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args,group_name = args.debugger.group_name, item_name = label_id, chart_label = chart_label)
+            ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args,group_name = args.debugger.group_name, item_name = label_id)
+    
 //assumes that entry has breakeven set to true (make sure before function is called )
 helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args, Entry entry) =>
     TradeExitInfo trade_exit_info = entry.trade_exit_info 
@@ -1311,7 +1322,7 @@ EntryStrategyLibrary_process_candle(EntryLibraryArgs args) =>
 
 // === Strategies/FinalStrategy.pine ===
 //@version=6
-strategy("FinalStrat")
+strategy("FinalStrat", calc_on_every_tick = true)
 //place a trade based on an entry 
 FinalStrategy_process_entry(Entry entry) =>
     bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)
