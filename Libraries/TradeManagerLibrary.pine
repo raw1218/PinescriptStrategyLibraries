@@ -390,8 +390,8 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         else if entry.state == EntryState.Breakeven 
             is_trade_open := false 
             right_bar_index := bar_index 
-            top_price := math.max(entry.entryPrice, entry.stopLossPrice)
-            bottom_price := math.min(entry.entryPrice, entry.stopLossPrice)
+            top_price := math.max(entry.entryPrice, entry.additional_data.original_stopLossPrice)
+            bottom_price := math.min(entry.entryPrice, entry.additional_data.original_stopLossPrice)
             box_color_base := args.debugger.breakeven_trade_color
         
         if na(box_color_base)
