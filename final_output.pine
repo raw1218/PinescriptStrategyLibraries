@@ -279,6 +279,8 @@ type EntryDebugData
     float transparency_level = 75 // 100 = fully transparent, 0 = fully colored 
 // === ENTRY STRUCTURE ===
 type EntryAdditionalData
+    float original_stopLossPrice = 0
+
     int placed_on_index = 0
     int entered_on_index = 0 
     int invalidated_on_index = 0 
@@ -652,6 +654,7 @@ helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args,
         bool should_be_breakeven = trade_exit_info.breakeven_on_n >= num_candles_past_entry
         if should_be_breakeven
             trade_exit_info.is_currently_break_even := true
+            entry.additional_data.original_stopLossPrice := entry.stopLossPrice
             //move stoploss to entry 
             entry.stopLossPrice := entry.entryPrice 
 
