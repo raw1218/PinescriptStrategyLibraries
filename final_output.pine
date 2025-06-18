@@ -280,6 +280,7 @@ type EntryDebugData
 // === ENTRY STRUCTURE ===
 type EntryAdditionalData
     float original_stopLossPrice = 0
+    float original_targetPrice = 0
 
     int placed_on_index = 0
     int entered_on_index = 0 
@@ -350,10 +351,14 @@ helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float s
     my_entry.num_shares := 1 
     my_entry.index := index
     my_entry.additional_data := helper_createEntryAdditionalData()
+    my_entry.additional_data.original_stopLossPrice := my_entry.stopLossPrice
+    my_entry.additional_data.original_targetPrice := my_entry.targetPrice 
     my_entry.additional_data.placed_on_index := bar_index 
     my_entry.trade_exit_info := TradeExitInfo.new()
     my_entry
-
+helper_fillEntryAdditionalData(Entry entry) =>
+    entry.additional_data.original_stopLossPrice := entry.stopLossPrice
+    entry.additional_data.original_targetPrice := entry.targetPrice 
 
 
 
@@ -362,6 +367,7 @@ create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPr
     my_entry.targetPrice := targetPrice
     //calculate RR
     my_entry.risk_reward_ratio := calculate_RR_ratio_based_on_prices(entryPrice, stopLossPrice, targetPrice)
+    helper_fillEntryAdditionalData(my_entry)
     my_entry
 
 create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetRR, int index) =>
@@ -369,6 +375,7 @@ create_Entry_with_target_RR(Direction dir, OrderType orderType, float entryPrice
     my_entry.risk_reward_ratio := targetRR
     //calculate RR
     my_entry.targetPrice := calculate_target_based_on_RR_ratio(entryPrice,stopLossPrice,targetRR)
+    helper_fillEntryAdditionalData(my_entry)
     my_entry
 
 // === TRADE WRAPPER STRUCTURE ===
@@ -386,6 +393,7 @@ stringify_TradeDataCollector(TradeDataCollector data) =>
     result += "Trades Entered: " + str.tostring(data.num_trades_entered) + "\n"
     result += "Trades Won: " + str.tostring(data.num_trades_won) + "\n"
     result += "Trades Lost: " + str.tostring(data.num_trades_lost) + "\n"
+    result += "Num Trades Breakeven: " + str.tostring(data.num_trades_breakeven) + "\n"
     result += "Total Profit (USD): " + str.tostring(data.total_profit_USD) + "\n"
     result += "Total Profit (R): " + str.tostring(data.total_profit_R)
     result
@@ -541,13 +549,19 @@ helper_TradeManagerLibrary_processTradeStopLoss(TradeLibraryArgs args, Entry ent
         args.data_collector.total_profit_USD -= get_entry_loss_amount(args, entry)
     0 //dummy return value 
 
-process_trade_win(TradeLibraryArgs args, Entry entry) =>
-    entry.state := EntryState.Success
-    args.data_collector.total_profit_R += entry.risk_reward_ratio
-    args.data_collector.num_trades_won += 1
-    entry.additional_data.won_on_index := bar_index 
-    args.something_has_changed := true    
-    args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
+
+
+helper_TradeManagerLibrary_processTradeTargetHit(TradeLibraryArgs args, Entry entry) =>
+    if entry.trade_exit_info.is_currently_break_even and (entry.entryPrice == entry.targetPrice)
+        helper_TradeManagerLibrary_processTradeBreakeven(args, entry)
+    else
+        entry.state := EntryState.Success
+        args.data_collector.total_profit_R += entry.risk_reward_ratio
+        args.data_collector.num_trades_won += 1
+        entry.additional_data.won_on_index := bar_index 
+        args.something_has_changed := true    
+        args.data_collector.total_profit_USD += get_entry_win_amount(args, entry)
+    0//dummy return value
 
 
 //sets the group and item names 
@@ -585,8 +599,8 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         float current_price = close
         int left_bar_index = entry.index 
         int right_bar_index = 0 
-        float top_price = math.max(entry.targetPrice, entry.stopLossPrice)
-        float bottom_price = math.min(entry.targetPrice, entry.stopLossPrice)
+        float top_price = math.max(entry.additional_data.original_targetPrice, entry.additional_data.original_stopLossPrice)
+        float bottom_price = math.min(entry.additional_data.original_targetPrice, entry.additional_data.original_stopLossPrice)
         color box_color_base = na
         if entry.state == EntryState.Success
             is_winning := true 
@@ -605,8 +619,8 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         else if entry.state == EntryState.Placed 
             is_trade_open := true 
             right_bar_index := bar_index + 1
-            top_price := math.max(entry.entryPrice, entry.stopLossPrice)
-            bottom_price := math.min(entry.entryPrice, entry.stopLossPrice) 
+            top_price := math.max(entry.entryPrice, entry.additional_data.original_stopLossPrice)
+            bottom_price := math.min(entry.entryPrice, entry.additional_data.original_stopLossPrice)
         else if entry.state == EntryState.Breakeven 
             is_trade_open := false 
             right_bar_index := bar_index 
@@ -663,9 +677,16 @@ helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args,
         int num_candles_past_entry = bar_index - entry.additional_data.entered_on_index 
         bool should_be_breakeven = trade_exit_info.breakeven_on_n == num_candles_past_entry
         if should_be_breakeven
-            trade_exit_info.is_currently_break_even := true
-            entry.additional_data.original_stopLossPrice := entry.stopLossPrice
-            entry.stopLossPrice := entry.entryPrice 
+            //check if we are below or above price (determines if we are moving our stop loss or take profit to break even)
+            float current_price = close 
+            bool is_long = entry.dir == Direction.Long 
+            bool is_short = entry.dir == Direction.Short
+            bool is_winning = (is_long and current_price >= entry.entryPrice) or (is_short and current_price <= entry.entryPrice)
+            trade_exit_info.is_currently_break_even := true 
+            if is_winning
+                entry.stopLossPrice := entry.entryPrice 
+            else 
+                entry.targetPrice := entry.entryPrice 
 
 
 
@@ -676,7 +697,7 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
     //ignore if this is the same index
     if entry.index != bar_index
 
-        //first set the breakeven if applicable because it can affect stoplosses 
+        //first set the breakeven if applicable because it can affect stoplosses / targets
         if entry.state == EntryState.Entered 
             if entry.trade_exit_info.will_break_even and  not entry.trade_exit_info.is_currently_break_even
                 helper_TradeManagerLibrary_processCandleForEntryBreakeven(args, entry)
@@ -697,7 +718,7 @@ TradeManagerLibrary_processCandleForEntry(TradeLibraryArgs args, Entry entry, fl
             if touchedStop
                 helper_TradeManagerLibrary_processTradeStopLoss(args, entry) //handles breakeven case
             else if crossedTarget or completely_passed_target
-                process_trade_win(args, entry)
+                helper_TradeManagerLibrary_processTradeTargetHit(args, entry)
 
 
 
