@@ -25,6 +25,7 @@ FinalStrategy_process_entry(Entry entry) =>
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
+args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
 
 // simple conditions,  red up candle and green down candle 

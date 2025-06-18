@@ -644,7 +644,6 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
         
 //assumes that entry has breakeven set to true (make sure before function is called )
 helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args, Entry entry) =>
-    label.new(text = "in processCandleForEntryBreakeven", x = bar_index, y = high)
     TradeExitInfo trade_exit_info = entry.trade_exit_info 
     //assumes entry.trade_exit_info.break_even = true 
     //assumes entry.state = Placed
@@ -1336,6 +1335,7 @@ FinalStrategy_process_entry(Entry entry) =>
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
+args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
 
 // simple conditions,  red up candle and green down candle 
