@@ -647,7 +647,6 @@ TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
     
     //print the aggregated trade data at the end 
     if barstate.islast 
-        label = label.new(text = "barstate.islast", x = bar_index, y = high)
         if args.debugger.print_trade_data_on_last_bar
             string label_text = stringify_TradeDataCollector(args.data_collector)
             string label_id = "print_trade_data_on_last_bar" + str.tostring(time)
