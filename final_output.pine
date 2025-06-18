@@ -352,10 +352,7 @@ helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float s
     my_entry.trade_exit_info := TradeExitInfo.new()
     my_entry
 
-TradeManagerLibrary_setEntryBreakeven(TradeLibraryArgs args, Entry entry, int breakeven_on_n) =>
-    entry.trade_exit_info.will_break_even := true 
-    entry.trade_exit_info.breakeven_on_n := breakeven_on_n
-    entry.trade_exit_info.is_currently_break_even := false
+
 
 
 create_Entry_with_target_price(Direction dir, OrderType orderType, float entryPrice, float stopLossPrice, float targetPrice, int index) =>
@@ -474,6 +471,10 @@ is_short_already_open(TradeLibraryArgs args) =>
                 break 
     already_open 
 
+TradeManagerLibrary_setEntryBreakeven(TradeLibraryArgs args, Entry entry, int breakeven_on_n) =>
+    entry.trade_exit_info.will_break_even := true 
+    entry.trade_exit_info.breakeven_on_n := breakeven_on_n
+    entry.trade_exit_info.is_currently_break_even := false
 // Adds a trade entry to the array
 place_trade(TradeLibraryArgs args, Entry entry) =>
     bool can_place = true 
