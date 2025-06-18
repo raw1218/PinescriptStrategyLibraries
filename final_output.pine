@@ -608,8 +608,8 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         else if entry.state == EntryState.Breakeven 
             is_trade_open := false 
             right_bar_index := bar_index 
-            top_price := math.max(entry.entryPrice, entry.stopLossPrice)
-            bottom_price := math.min(entry.entryPrice, entry.stopLossPrice)
+            top_price := math.max(entry.entryPrice, entry.additional_data.original_stopLossPrice)
+            bottom_price := math.min(entry.entryPrice, entry.additional_data.original_stopLossPrice)
             box_color_base := args.debugger.breakeven_trade_color
         
         if na(box_color_base)
@@ -651,11 +651,10 @@ helper_TradeManagerLibrary_processCandleForEntryBreakeven(TradeLibraryArgs args,
     //assumes entry.state = Placed
     if not trade_exit_info.is_currently_break_even
         int num_candles_past_entry = bar_index - entry.additional_data.entered_on_index 
-        bool should_be_breakeven = trade_exit_info.breakeven_on_n >= num_candles_past_entry
+        bool should_be_breakeven = trade_exit_info.breakeven_on_n == num_candles_past_entry
         if should_be_breakeven
             trade_exit_info.is_currently_break_even := true
             entry.additional_data.original_stopLossPrice := entry.stopLossPrice
-            //move stoploss to entry 
             entry.stopLossPrice := entry.entryPrice 
 
 
