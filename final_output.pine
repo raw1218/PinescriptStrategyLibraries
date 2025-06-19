@@ -29,7 +29,7 @@ type MultiTimeFrameLibraryArgs
 create_MultiTimeFrameLibraryArgs() =>
     MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
     args.time_frames := array.new<int>()
-    args.remaining_time_until_update := array.new<int>();
+    args.remaining_time_until_update := array.new<int>()
     args 
 
 //returns -1 it not in array
@@ -87,7 +87,7 @@ helper_MultiTimeFrameLibrary_initializeTimeFrame(MultiTimeFrameLibraryArgs args,
 
 MultiTimeFrameLibrary_processCandle(MultiTimeFrameLibraryArgs args) =>
     if args.remaining_time_until_update.size() > 0 
-        for args.remaining_time_until_update.size() - 1 to 0 
+        for i = args.remaining_time_until_update.size() - 1 to 0 
             int remaining_time = args.remaining_time_until_update.get(i)
             // potentially initialize
             if i < 0 
@@ -99,7 +99,7 @@ MultiTimeFrameLibrary_processCandle(MultiTimeFrameLibraryArgs args) =>
 MultiTimeFrameLibrary_isHigherTimeFrameCandleFinished(MultiTimeFrameLibraryArgs args, int minutes) =>
     int timeframe_index = helper_getTimeFrameIndex(args, minutes)
     args.remaining_time_until_update.get(timeframe_index) == 0
-    
+
                 
                 
 
@@ -732,7 +732,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         entry_debug_info.drawing_finished := true
 
 
-TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
+TradeManagerLibraryDebugger_updateDrawings(TradeLibraryArgs args) =>
     //draw the trades 
     if args.entry_array.size() > 0
         for i = args.entry_array.size() - 1 to 0
@@ -839,7 +839,7 @@ TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
             TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
     //optional debugging / drawing 
     if args.debugger.enable_debugging
-        TradeManagerLibraryDebugger_processCandle(args)
+        TradeManagerLibraryDebugger_updateDrawings(args)
 
 
 
