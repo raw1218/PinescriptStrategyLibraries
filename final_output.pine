@@ -271,7 +271,7 @@ stringify_EntryState(EntryState s) =>
 
 
 type EntryDebugData
-    bool should_draw = false //draw with the debugger
+    bool should_draw = true //draw with the debugger
     bool is_drawn_on_screen = false
     string drawing_group_name = na 
     string drawing_item_name = na
@@ -351,8 +351,6 @@ helper_createEntry(Direction dir, OrderType orderType, float entryPrice, float s
     my_entry.num_shares := 1 
     my_entry.index := index
     my_entry.additional_data := helper_createEntryAdditionalData()
-    my_entry.additional_data.original_stopLossPrice := my_entry.stopLossPrice
-    my_entry.additional_data.original_targetPrice := my_entry.targetPrice 
     my_entry.additional_data.placed_on_index := bar_index 
     my_entry.trade_exit_info := TradeExitInfo.new()
     my_entry
@@ -731,9 +729,11 @@ remove_all_finished_trades(TradeLibraryArgs args) =>
             bool finished = false
             if current_entry.state == EntryState.Invalidated
                 finished := true
-            if current_entry.state == EntryState.Loss
+            else if current_entry.state == EntryState.Loss
                 finished := true
-            if current_entry.state == EntryState.Success
+            else if current_entry.state == EntryState.Success
+                finished := true
+            else if current_entry.state == EntryState.Breakeven
                 finished := true
             if finished
                 args.entry_array.remove(i)
