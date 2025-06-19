@@ -423,7 +423,7 @@ TradeManagerLibraryDebugger_processAndDrawEntry(TradeLibraryArgs args, Entry ent
         entry_debug_info.drawing_finished := true
 
 
-TradeManagerLibraryDebugger_processCandle(TradeLibraryArgs args) =>
+TradeManagerLibraryDebugger_updateDrawings(TradeLibraryArgs args) =>
     //draw the trades 
     if args.entry_array.size() > 0
         for i = args.entry_array.size() - 1 to 0
@@ -530,7 +530,7 @@ TradeManagerLibrary_process_candle(TradeLibraryArgs args) =>
             TradeManagerLibrary_processCandleForEntry(args, current_entry, high, low)
     //optional debugging / drawing 
     if args.debugger.enable_debugging
-        TradeManagerLibraryDebugger_processCandle(args)
+        TradeManagerLibraryDebugger_updateDrawings(args)
 
 
 
