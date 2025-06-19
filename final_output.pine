@@ -12,6 +12,97 @@ MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, f
     rr <= target_R 
 
 
+// === Libraries/MultiTimeFrameLibrary.pine ===
+type TimeFrameCandle
+    float high_price = 0 
+    float low_price = 0
+    int timeframe = 0 //in minutes
+    int index = 0
+    bool is_finished 
+    
+
+type MultiTimeFrameLibraryArgs
+    array<int> time_frames = na 
+    int lowest_time_frame = 1 
+
+    array<int> remaining_time_until_update = na
+create_MultiTimeFrameLibraryArgs() =>
+    MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
+    args.time_frames := array.new<int>()
+    args.remaining_time_until_update := array.new<int>();
+    args 
+
+//returns -1 it not in array
+helper_getTimeFrameIndex(MultiTimeFrameLibraryArgs args, int timeframe)=>
+    int result = -1
+    if args.time_frames.size() > 0 
+        for i = args.time_frames.size() -1 to 0
+            int current_time_frame = args.time_frames.get(i)
+            if current_time_frame == timeframe
+                result := i 
+                break 
+    result 
+
+
+MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int minutes) =>
+    //make sure it doesnt already exist 
+    if helper_getTimeFrameIndex(args, minutes) < 0
+        args.time_frames.push(minutes)
+        args.remaining_time_until_update.push(-1) //mark uninitialized 
+
+
+MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int minutes) =>
+    TimeFrameCandle candle = TimeFrameCandle.new()
+
+    // Convert to TradingView-compatible timeframe string
+    string tf_str = str.tostring(minutes)
+
+    // Retrieve HTF data and bar confirmation status
+    [o, h, l, c, isConfirmed] = request.security(syminfo.tickerid, tf_str, [open, high, low, close, barstate.isconfirmed])
+
+    // Fill the candle struct
+    candle.high_price := h
+    candle.low_price := l
+    candle.timeframe := minutes
+    candle.index := bar_index  // This is LTF bar_index; it will be shared across multiple 1m bars
+    candle.is_finished := isConfirmed
+
+    candle
+
+
+
+helper_MultiTimeFrameLibrary_initializeTimeFrame(MultiTimeFrameLibraryArgs args, int minutes) =>
+    
+
+        // Convert to TradingView-compatible timeframe string
+    string tf_str = str.tostring(minutes)
+
+    // Retrieve HTF data and bar confirmation status
+    [isConfirmed] = request.security(syminfo.tickerid, tf_str, [barstate.isconfirmed])
+    if isConfirmed 
+        int time_frame_index = helper_getTimeFrameIndex(args, minutes)
+        args.remaining_time_until_update.set(time_frame_index, 0)
+        
+
+
+MultiTimeFrameLibrary_processCandle(MultiTimeFrameLibraryArgs args) =>
+    if args.remaining_time_until_update.size() > 0 
+        for args.remaining_time_until_update.size() - 1 to 0 
+            int remaining_time = args.remaining_time_until_update.get(i)
+            // potentially initialize
+            if i < 0 
+                int timeframe = args.time_frames.get(i)
+                helper_MultiTimeFrameLibrary_initializeTimeFrame(args,timeframe)
+            else if remaining_time > 0 
+                args.remaining_time_until_update.set(i, remaining_time - 1)
+
+MultiTimeFrameLibrary_isHigherTimeFrameCandleFinished(MultiTimeFrameLibraryArgs args, int minutes) =>
+    int timeframe_index = helper_getTimeFrameIndex(args, minutes)
+    args.remaining_time_until_update.get(timeframe_index) == 0
+    
+                
+                
+
 // === Libraries/ChartDrawingLibrary.pine ===
 /////////////// Chart Drawing Library //////////////////////////////////////////////////////////
 //Supports grouping different sets of boxes / drawings into named groups
