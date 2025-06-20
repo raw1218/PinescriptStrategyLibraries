@@ -23,16 +23,55 @@ FinalStrategy_process_entry(Entry entry) =>
 
 
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
+type customStrategyArgs 
+    int num_timeframes = 0 
+    array<int> timeframes = na 
+    multi_timeframe_library_args = na 
+    array<InsideCandleArgs> timeframe_inside_candle_args = na
+create_customStrategyArgs() => 
+    customStrategyArgs args = customStrategyArgs.new() 
+    args.timeframes := array.new<int>() 
+    args.multi_timeframe_library_args := create_MultiTimeFrameLibraryArgs() 
+    args.timeframe_inside_candle_args := array.new<InsideCandleArgs>() 
+    args
+
+customStrategy_addTimeframe(customStrategyArgs args, int timeframe, bool tracks_inside_candle = false) => 
+    MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
+
+    //inside candle tracker 
+    InsideCandleArgs inside_candle_args = na 
+    if tracks_inside_candle
+        inside_candle_args := create_InsideCandleArgs()
+    args.timeframe_inside_candle_args.push(inside_candle_args)
 
 
-//Test multi time frame drawing 
-var MultiTimeFrameLibraryArgs multi_timeframe_library_args = create_MultiTimeFrameLibraryArgs()
-var bool is_multitimeframe_library_args_initialized = false
-if not is_multitimeframe_library_args_initialized
-    multi_timeframe_library_args.debugger.debugger_enabled := true
-    MultiTimeFrameLibrary_keepTrackofTimeFrame(multi_timeframe_library_args, 5)
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(multi_timeframe_library_args, 5, true)
-MultiTimeFrameLibrary_update(multi_timeframe_library_args)     
+
+helper_customStrategy_update(customStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
+    //update inside candle lib
+    InsideCandleArgs inside_candle_args = args.timeframe_inside_candle_args.get(timeframe_index)
+    if not na(inside_candle_args)
+        InsideCandleLibrary_processCandle(inside_candle_args, current_candle)
+
+
+customStrategy_update(customStrategyArgs args) => 
+    MultiTimeFrameLibrary_update(args.multi_timeframe_library_args)
+    //check if we have any new HTF candles 
+    MultiTimeFrameLibraryOutput timeframe_lib_output = args.multi_timeframe_library_args.output
+    if timeframe_lib_output.something_has_changed
+        if timeframe_lib_output.timeframe_candle_has_changed.size() > 0 
+            for i = timeframe_lib_output.timeframe_candle_has_changed.size() - 1 to 0 
+                bool candle_has_changed = timeframe_lib_output.timeframe_candle_has_changed.get(i)
+                if candle_has_changed
+                    TimeFrameCandle current_candle = timeframe_lib_output.current_candles.get(i)
+                    MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
+
+        
+
+var customStrategyArgs custom_strategy_args = create_customStrategyArgs()
+var bool is_initialized = false 
+if not is_initialized 
+    customStrategy_addTimeFrame(custom_strategy_args, 5, tracks_inside_candle = true)
+customStrategy_update()
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()

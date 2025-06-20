@@ -3,6 +3,10 @@
 type TimeFrameCandleDebugInfo
     int first_bar_index = 0
     int last_bar_index = 0
+helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugInfo source, TimeFrameCandleDebugInfo destination) =>
+    destination.first_bar_index := source.first_bar_index
+    destination.last_bar_index := source.last_bar_index
+
 type TimeFrameCandle
     float high_price = 0 
     float low_price = 0
@@ -12,27 +16,49 @@ type TimeFrameCandle
     int bar_index_in_own_timeframe = 0
     bool is_finished = false 
     TimeFrameCandleDebugInfo debug_info = na
+MultiTimeFrameLibrary_copyTimeFrameCandle(TimeFrameCandle source, TimeFrameCandle destination) =>
+    destination.high_price := source.high_price
+    destination.low_price := source.low_price
+    destination.open_price := source.open_price
+    destination.close_price := source.close_price
+    destination.timeframe := source.timeframe
+    destination.bar_index_in_own_timeframe := source.bar_index_in_own_timeframe
+    destination.is_finished := source.is_finished
 
+    // Ensure debug_info is allocated if not already
+    if na(destination.debug_info)
+        destination.debug_info := TimeFrameCandleDebugInfo.new()
 
+    helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(source.debug_info, destination.debug_info)
 
 type MultiTimeFrameLibraryDebuggingInfo
     bool debugger_enabled = true 
     array<bool> should_print_timeframe = na
     ChartDrawingArgs chart_drawing_library_args = na 
     float candle_transparency_level = 75 //0 to 100
+    bool draw_all_candles = false 
 create_MuliTimeFrameLibraryDebuggingInfo() =>
     MultiTimeFrameLibraryDebuggingInfo debugger = MultiTimeFrameLibraryDebuggingInfo.new() 
     debugger.should_print_timeframe := array.new<bool>()
     debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
     debugger
     
+type MultiTimeFrameLibraryOutput 
+    bool something_has_changed = false 
+    array<bool> timeframe_candle_has_changed = na
+    array<TimeFrameCandle> current_candles = na
+create_MultiTimeFrameLibraryOutput() =>
+    MultiTimeFrameLibraryOutput output = MultiTimeFrameLibraryOutput.new()
+    output.timeframe_candle_has_changed := array.new<bool>() 
+    output.current_candles := array.new<TimeFrameCandle>()
+    output
 type MultiTimeFrameLibraryArgs
     array<int> time_frames = na 
     int lowest_time_frame = 1 
-    array<TimeFrameCandle> current_candles = na
     array<int> remaining_time_until_update = na
     array<int> last_timeframe_bar_index = na 
     MultiTimeFrameLibraryDebuggingInfo debugger = na
+    MultiTimeFrameLibraryOutput output = na
 create_MultiTimeFrameLibraryArgs() =>
     MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
     args.time_frames := array.new<int>()
@@ -40,6 +66,7 @@ create_MultiTimeFrameLibraryArgs() =>
     args.last_timeframe_bar_index := array.new<int>()
     args.current_candles := array.new<TimeFrameCandle>()
     args.debugger := create_MuliTimeFrameLibraryDebuggingInfo()
+    args.output := create_MultiTimeFrameLibraryOutput()
     args 
 
 
@@ -67,7 +94,7 @@ MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int m
         args.time_frames.push(minutes)
         args.remaining_time_until_update.push(-1) //mark uninitialized 
         args.last_timeframe_bar_index.push(-1)
-        args.current_candles.push(na)
+        args.output.current_candles.push(na)
         
         //optional debugging / drawing 
         if args.debugger.debugger_enabled
@@ -140,6 +167,7 @@ MultiTimeFrameLibraryDebugger_drawCandle(MultiTimeFrameLibraryArgs args, TimeFra
 
 
 MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
+    args.something_has_changed := false 
     if args.remaining_time_until_update.size() > 0 
         for i = args.remaining_time_until_update.size() - 1 to 0 
             //check if we have a new candle index 
@@ -149,6 +177,7 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
             int prev_bar_index = args.last_timeframe_bar_index.get(i)
 
             if timeframe_bar_index > prev_bar_index
+                args.something_has_changed := true
                 //update previous bar index 
                 args.last_timeframe_bar_index.set(i, timeframe_bar_index)
                 //reset the count 
@@ -158,15 +187,17 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
 
                 //optionally draw the new candle
                 if args.debugger.debugger_enabled 
-                    TimeFrameCandle current_candle = args.current_candles.get(i)
+                    TimeFrameCandle current_candle = args.output.current_candles.get(i)
                     int candle_start_point = bar_index
                     if not na(current_candle)
                         candle_start_point := current_candle.debug_info.last_bar_index
                     new_candle.debug_info.last_bar_index := bar_index 
                     new_candle.debug_info.first_bar_index := candle_start_point + 1
-                    MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
+                    if args.debugger.draw_all_candles == true
+                        MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
 
-                args.current_candles.set(i, new_candle)
+                args.output.current_candles.set(i, new_candle)
+
 
 
 
