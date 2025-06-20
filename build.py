@@ -3,8 +3,8 @@ import os
 # List of files in the order you want them combined
 FILES = [
     "Libraries/MiscLibrary.pine",
-    "Libraries/MultiTimeFrameLibrary.pine",
     "Libraries/ChartDrawingLibrary.pine",
+    "Libraries/MultiTimeFrameLibrary.pine",
     "Libraries/TradeManagerLibrary.pine",
     "Libraries/BooleanExpressionLibrary.pine",
     "Libraries/KeyLevelLibrary.pine",
