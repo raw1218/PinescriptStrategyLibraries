@@ -24,6 +24,17 @@ FinalStrategy_process_entry(Entry entry) =>
 
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
 
+
+//Test multi time frame drawing 
+var MultiTimeFrameLibraryArgs multi_timeframe_library_args = create_MultiTimeFrameLibraryArgs()
+var bool is_multitimeframe_library_args_initialized = false
+if not is_multitimeframe_library_args_initialized
+    multi_timeframe_library_args.debugger.debugger_enabled := true
+    MultiTimeFrameLibrary_keepTrackofTimeFrame(multi_timeframe_library_args, 5)
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(multi_timeframe_library_args, 5)
+     
+
+
 var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 

@@ -5,6 +5,14 @@
 //Update_box(group_name, coordinates)
 //Finish_box(group_name, coordinates)
 
+type ChartDrawingHorizontalLine
+	bool solid_line = true 
+	color line_color = na 
+	float price = 0 
+	int left_x = 0
+	int right_x = 0
+	line tv_line_item = na
+
 type ChartDrawingBox
 	float top_price = na 
 	float bottom_price = na 
@@ -13,6 +21,7 @@ type ChartDrawingBox
 	color box_color = na 
 	color border_color = na
 	box tv_box_item = na
+	array<ChartDrawingHorizontalLine> horizontal_lines = na
 
 type ChartDrawingLabel
 	int bar_index_x = na 
@@ -85,25 +94,54 @@ helper_removeCurrentChartDrawingItemByName(ChartDrawingArgs args, ChartDrawingGr
 				group.current_drawings.remove(i)
 				break //assumes no duplicates
 
+
+helper_ChartDrawingLibrary_undrawBox(ChartDrawingArgs args, ChartDrawingBox chart_box) =>
+	//delete the box
+	if not na(chart_box.tv_box_item)
+		chart_box.tv_box_item.delete()
+		chart_box.tv_box_item := na 
+	//delete the horizontal lines 
+	if not na(chart_box.horizontal_lines)
+		if chart_box.horizontal_lines.size() > 0 
+			for i = chart_box.horizontal_lines.size() - 1 to 0 
+				ChartDrawingHorizontalLine current_line = chart_box.horizontal_lines.get(i)
+				if not na(current_line.tv_line_item)
+					current_line.tv_line_item.delete()
+					current_line.tv_line_item := na 
+
+				
+
 helper_undrawChartDrawingItem(ChartDrawingArgs args, ChartDrawingItem item) =>
-	//check for chart box 
+	//delete chart box if it exists
 	if not na(item.chart_box)
-		if not na(item.chart_box.tv_box_item)
-			item.chart_box.tv_box_item.delete()
-			item.chart_box.tv_box_item := na 
+		helper_ChartDrawingLibrary_undrawBox()
+
 	//check for labels 
 	if not na(item.chart_label)
 		if not na(item.chart_label.tv_label_item)
 			item.chart_label.tv_label_item.delete()
 			item.chart_label.tv_label_item := na 
 
+helper_ChartDrawingLibrary_drawChartHorizontalLine(ChartDrawingArgs args, ChartDrawingHorizontalLine chart_line) =>
+	if na(chart_line.tv_line_item)
+		chart_line.tv_line_item := line.new(x1 = chart_line.left_x, x2 = chart_line.right_x, y1 = chart_line.price, y2 = chart_line.price)
+helper_ChartDrawingLibrary_drawChartBox(ChartDrawingArgs args, ChartDrawingBox chart_box) =>
+	if na(chart_box.tv_box_item)
+		chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
+			top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
+	//draw lines 
+	if chart_box.horizontal_lines.size() > 0 
+		for i = chart_box.horizontal_lines.size() - 1 to 0 
+			ChartDrawingHorizontalLine current_line = chart_box.horizontal_lines.get(i)
+			helper_ChartDrawingLibrary_drawChartHorizontalLine(args, current_line)
+
+
+
 helper_drawChartDrawingItem(ChartDrawingArgs args, ChartDrawingItem item) =>
 	//chart box 
 	if not na(item.chart_box)
 		ChartDrawingBox chart_box = item.chart_box
-		if na(chart_box.tv_box_item)
-			chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,
-         		top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
+		helper_ChartDrawingLibrary_drawChartBox(args, chart_box)
 
 	if not na(item.chart_label)
 		ChartDrawingLabel chart_label = item.chart_label
@@ -185,8 +223,17 @@ ChartDrawingLibrary_createChartDrawingBox(ChartDrawingArgs args, float top_price
 	my_box.right_bar_index := right_bar_index
 	my_box.box_color := bg_color 
 	my_box.border_color := border_color
+	my_box.horizontal_lines := array.new<ChartDrawingHorizontalLine>()
 
 	my_box //return the box 
+
+ChartDrawingLibrary_addHorizontalLineToChartDrawingBox(ChartDrawingArgs args, ChartDrawingBox chart_box, float line_price, bool solid_line) =>
+	ChartDrawingHorizontalLine my_line = ChartDrawingHorizontalLine.new()
+	my_line.left_x := chart_box.left_bar_index
+	my_line.right_x := chart_box.right_bar_index
+	my_line.price := line_price 
+	my_line.solid_line := solid_line 
+	chart_box.horizontal_lines.push(my_line)
 
 ChartDrawingLibrary_createChartDrawingLabel(ChartDrawingArgs args, string label_text, int bar_index_x, float price_y, color label_color = na) =>
 	ChartDrawingLabel my_label = ChartDrawingLabel.new()
