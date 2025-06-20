@@ -31,7 +31,7 @@ var bool is_multitimeframe_library_args_initialized = false
 if not is_multitimeframe_library_args_initialized
     multi_timeframe_library_args.debugger.debugger_enabled := true
     MultiTimeFrameLibrary_keepTrackofTimeFrame(multi_timeframe_library_args, 5)
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(multi_timeframe_library_args, 5)
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(multi_timeframe_library_args, 5, true)
      
 
 

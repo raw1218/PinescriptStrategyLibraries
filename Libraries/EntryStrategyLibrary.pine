@@ -82,7 +82,7 @@ create_EntryLibraryArgs() =>
 	args.output := create_EntryLibraryOutput()
 	args.trade_library_args := create_TradeLibraryArgs()
 	args.key_level_library_args := create_KeyLevelLibraryArgs()
-	args.ulti_timeframe_library_args := create_MultiTimeFrameLibraryArgs()
+	args.multi_timeframe_library_args := create_MultiTimeFrameLibraryArgs()
 	args
 
 
