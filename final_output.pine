@@ -139,7 +139,7 @@ helper_undrawChartDrawingItem(ChartDrawingArgs args, ChartDrawingItem item) =>
 
 helper_ChartDrawingLibrary_drawChartHorizontalLine(ChartDrawingArgs args, ChartDrawingHorizontalLine chart_line) =>
 	if na(chart_line.tv_line_item)
-		chart_line.tv_line_item := line.new(x1 = chart_line.left_x, x2 = chart_line.right_x, y1 = chart_line.price, y2 = chart_line.price, color = chart_line.line_color, style = line.style_solid, width = 2)
+		chart_line.tv_line_item := line.new(x1 = chart_line.left_x, x2 = chart_line.right_x, y1 = chart_line.price, y2 = chart_line.price, line_color = chart_line.color)
 helper_ChartDrawingLibrary_drawChartBox(ChartDrawingArgs args, ChartDrawingBox chart_box) =>
 	if na(chart_box.tv_box_item)
 		chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
