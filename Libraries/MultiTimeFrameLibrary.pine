@@ -1,4 +1,8 @@
 
+
+type TimeFrameCandleDebugInfo
+    int first_bar_index = 0
+    int last_bar_index = 0
 type TimeFrameCandle
     float high_price = 0 
     float low_price = 0
@@ -7,33 +11,34 @@ type TimeFrameCandle
     int timeframe = 0 //in minutes
     int bar_index_in_own_timeframe = 0
     bool is_finished = false 
+    TimeFrameCandleDebugInfo debug_info = na
 
-type TimeFrameCandleDebugInfo
-    int first_bar_index = 0
-    int last_bar_index = 0
+
 
 type MultiTimeFrameLibraryDebuggingInfo
     bool debugger_enabled = true 
     array<bool> should_print_timeframe = na
-    array<TimeFrameCandleDebugInfo> timeframe_debug_info = na
     ChartDrawingArgs chart_drawing_library_args = na 
     float candle_transparency_level = 75 //0 to 100
 create_MuliTimeFrameLibraryDebuggingInfo() =>
     MultiTimeFrameLibraryDebuggingInfo debugger = MultiTimeFrameLibraryDebuggingInfo.new() 
     debugger.should_print_timeframe := array.new<bool>()
-    debugger.timeframe_debug_info := array.new<TimeFrameCandleDebugInfo>()
     debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
     debugger
     
 type MultiTimeFrameLibraryArgs
     array<int> time_frames = na 
     int lowest_time_frame = 1 
+    array<TimeFrameCandle> current_candles = na
     array<int> remaining_time_until_update = na
+    array<int> last_timeframe_bar_index = na 
     MultiTimeFrameLibraryDebuggingInfo debugger = na
 create_MultiTimeFrameLibraryArgs() =>
     MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
     args.time_frames := array.new<int>()
     args.remaining_time_until_update := array.new<int>()
+    args.last_timeframe_bar_index := array.new<int>()
+    args.current_candles := array.new<TimeFrameCandle>()
     args.debugger := create_MuliTimeFrameLibraryDebuggingInfo()
     args 
 
@@ -55,17 +60,20 @@ MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(MultiTimeFrameLib
 
 
 
+
 MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int minutes) =>
     //make sure it doesnt already exist 
     if helper_getTimeFrameIndex(args, minutes) < 0
         args.time_frames.push(minutes)
         args.remaining_time_until_update.push(-1) //mark uninitialized 
+        args.last_timeframe_bar_index.push(-1)
+        args.current_candles.push(na)
         
         //optional debugging / drawing 
         if args.debugger.debugger_enabled
             args.debugger.should_print_timeframe.push(false)
-            TimeFrameCandleDebugInfo timeframe_debug_info = TimeFrameCandleDebugInfo.new() 
-            args.debugger.timeframe_debug_info.push(timeframe_debug_info)
+
+
 
 
 MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int minutes) =>
@@ -86,13 +94,15 @@ MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int min
     candle.bar_index_in_own_timeframe := barIndex  // This is LTF bar_index; it will be shared across multiple 1m bars
     candle.is_finished := isConfirmed
 
+    if args.debugger.debugger_enabled
+        candle.debug_info := TimeFrameCandleDebugInfo.new()
     candle
 
 helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle candle) =>
 
     int candle_timeframe = candle.timeframe 
     int candle_timeframe_index = helper_getTimeFrameIndex(args, candle_timeframe)
-    TimeFrameCandleDebugInfo candle_debug_info = args.debugger.timeframe_debug_info.get(candle_timeframe_index)
+    TimeFrameCandleDebugInfo candle_debug_info = candle.debug_info
     bool is_green = candle.close_price >= candle.open_price 
     color candle_base_color = is_green ? color.green : color.red 
     color candle_color = color.new(candle_base_color, args.debugger.candle_transparency_level)
@@ -103,54 +113,40 @@ helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args,
     ChartDrawingLibrary_addHorizontalLineToChartDrawingBox(args = args.debugger.chart_drawing_library_args, chart_box = chart_box , line_price = candle.close_price, solid_line = false)
     chart_box 
 
-helper_MultiTimeFrameLibrary_initializeTimeFrame(MultiTimeFrameLibraryArgs args, int minutes) =>
-    
-
-        // Convert to TradingView-compatible timeframe string
-    string tf_str = str.tostring(minutes)
-
-    // Retrieve HTF data and bar confirmation status
-    [isConfirmed] = request.security(syminfo.tickerid, tf_str, [barstate.isconfirmed])
-    if isConfirmed 
-        int time_frame_index = helper_getTimeFrameIndex(args, minutes)
-        args.remaining_time_until_update.set(time_frame_index, 0)
-
             
-MultiTimeFrameLibraryDebugger_update(MultiTimeFrameLibraryArgs args) => 
-    if args.remaining_time_until_update.size() > 0 
-        for i = args.remaining_time_until_update.size() - 1 to 0 
-            int remaining_time = args.remaining_time_until_update.get(i)
-            // only draw initialized ones
-            if i >= 0
-                int timeframe = args.time_frames.get(i)
-                TimeFrameCandleDebugInfo timeframe_debug_info = args.debugger.timeframe_debug_info.get(i)
-                timeframe_debug_info.last_bar_index := bar_index 
-                timeframe_debug_info.first_bar_index := bar_index - (timeframe - remaining_time)
-                TimeFrameCandle current_candle = MultiTimeFrameLibrary_getTimeframeCandle(args, timeframe)
-                ChartDrawingBox chart_box = helper_MultiTimeFrameLibrary_createBoxFromCandle(args, current_candle)
-                string chart_drawing_group_name = "MultiTimeFrame_" + str.tostring(timeframe)
-                string chart_drawing_item_name = str.tostring(current_candle.bar_index_in_own_timeframe)
-                ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name, chart_box = chart_box)
-                if current_candle.is_finished 
-                    ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name)
-
-            
+MultiTimeFrameLibraryDebugger_drawCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle current_candle) => 
+    int timeframe = current_candle.timeframe 
+    ChartDrawingBox chart_box = helper_MultiTimeFrameLibrary_createBoxFromCandle(args, current_candle)
+    string chart_drawing_group_name = "MultiTimeFrame_" + str.tostring(timeframe)
+    string chart_drawing_item_name = str.tostring(current_candle.bar_index_in_own_timeframe)
+    ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name, chart_box = chart_box)
+    ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name)
 
 
 MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
     if args.remaining_time_until_update.size() > 0 
         for i = args.remaining_time_until_update.size() - 1 to 0 
-            int remaining_time = args.remaining_time_until_update.get(i)
-            // potentially initialize
+            //check if we have a new candle index 
             int timeframe = args.time_frames.get(i)
-            if i < 0 
-                helper_MultiTimeFrameLibrary_initializeTimeFrame(args,timeframe)
-            else if remaining_time > 0 
-                args.remaining_time_until_update.set(i, remaining_time - 1)
-            else if remaining_time == 0
-                args.remaining_time_until_update.set(i, timeframe - 1) //reset
-    if args.debugger.debugger_enabled
-        MultiTimeFrameLibraryDebugger_update(args)
+            string tf_str = str.tostring(timeframe)
+            [timeframe_bar_index] = request.security(syminfo.tickerid, tf_str, [bar_index])
+            int prev_bar_index = args.last_timeframe_bar_index.get(i)
+
+            if timeframe_bar_index > prev_bar_index
+                //update previous bar index 
+                args.last_timeframe_bar_index.set(i, timeframe_bar_index)
+                //reset the count 
+                args.remaining_time_until_update.set(i, timeframe)
+                TimeFrameCandle new_candle = MultiTimeFrameLibrary_getTimeframeCandle(args, timeframe)
+                args.current_candles.set(i, new_candle)
+
+                //optionally draw the new candle
+                if args.debugger.debugger_enabled 
+                    TimeFrameCandleDebugInfo 
+                    new_candle.debug_info.last_bar_index := bar_index 
+                    new_candle.debug_info.first_bar_index := bar_index - timeframe
+                    MultiTimeFrameLibraryDebugger_drawCandle(args, current_candle)
+
 
 
 
