@@ -141,7 +141,7 @@ add_condition_to_EntryRule(args, green_down_1r_rule_name, past_start_time_condit
 
 
 
-args.process_longs := true 
+args.process_longs := false 
 args.process_shorts := false 
 args.trade_library_args.parameters.pyramiding_allowed := true
 EntryStrategyLibrary_process_candle(args)

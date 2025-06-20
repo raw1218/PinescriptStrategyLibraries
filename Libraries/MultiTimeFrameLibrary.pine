@@ -98,29 +98,45 @@ MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int min
         candle.debug_info := TimeFrameCandleDebugInfo.new()
     candle
 
-helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle candle) =>
+helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle candle, bool candle_body) =>
 
     int candle_timeframe = candle.timeframe 
     int candle_timeframe_index = helper_getTimeFrameIndex(args, candle_timeframe)
     TimeFrameCandleDebugInfo candle_debug_info = candle.debug_info
-    bool is_green = candle.close_price >= candle.open_price 
-    color candle_base_color = is_green ? color.green : color.red 
-    color candle_color = color.new(candle_base_color, args.debugger.candle_transparency_level)
-    ChartDrawingBox chart_box = ChartDrawingLibrary_createChartDrawingBox(args = args.debugger.chart_drawing_library_args , top_price = candle.high_price , bottom_price = candle.low_price, left_bar_index = candle_debug_info.first_bar_index, right_bar_index = candle_debug_info.last_bar_index, bg_color = candle_color , border_color = candle_color)
 
-    //open and close line 
-    ChartDrawingLibrary_addHorizontalLineToChartDrawingBox(args = args.debugger.chart_drawing_library_args, chart_box = chart_box, line_price = candle.open_price, solid_line = false)
-    ChartDrawingLibrary_addHorizontalLineToChartDrawingBox(args = args.debugger.chart_drawing_library_args, chart_box = chart_box , line_price = candle.close_price, solid_line = false)
+    ChartDrawingBox chart_box = na 
+    if candle_body
+        bool is_green = candle.close_price >= candle.open_price 
+        color candle_base_color = is_green ? color.green : color.red 
+        color candle_color = color.new(candle_base_color, args.debugger.candle_transparency_level)
+        float top_price = math.max(candle.open_price, candle.close_price)
+        float bottom_price = math.min(candle.open_price, candle.close_price)
+        chart_box := ChartDrawingLibrary_createChartDrawingBox(args = args.debugger.chart_drawing_library_args , top_price = top_price, bottom_price = bottom_price, left_bar_index = candle_debug_info.first_bar_index, right_bar_index = candle_debug_info.last_bar_index, bg_color = candle_color , border_color = candle_color)
+    else
+        bool is_green = candle.close_price >= candle.open_price 
+        color candle_base_color = is_green ? color.green : color.red 
+        color candle_color = color.new(candle_base_color, 0)
+        float top_price = candle.high_price
+        float bottom_price = candle.low_price
+        chart_box := ChartDrawingLibrary_createChartDrawingBox(args = args.debugger.chart_drawing_library_args , top_price = top_price, bottom_price = bottom_price, left_bar_index = candle_debug_info.first_bar_index, right_bar_index = candle_debug_info.last_bar_index, bg_color = color.new(color.red, 100) , border_color = candle_color)
+
+    
     chart_box 
+
+            
 
             
 MultiTimeFrameLibraryDebugger_drawCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle current_candle) => 
     int timeframe = current_candle.timeframe 
-    ChartDrawingBox chart_box = helper_MultiTimeFrameLibrary_createBoxFromCandle(args, current_candle)
+    ChartDrawingBox chart_box = helper_MultiTimeFrameLibrary_createBoxFromCandle(args, current_candle, true )
+    ChartDrawingBox outline_box = helper_MultiTimeFrameLibrary_createBoxFromCandle(args, current_candle, false)
     string chart_drawing_group_name = "MultiTimeFrame_" + str.tostring(timeframe)
     string chart_drawing_item_name = str.tostring(current_candle.bar_index_in_own_timeframe)
+    string chart_drawing_outline_item_name = str.tostring(current_candle.bar_index_in_own_timeframe) + "_outline"
     ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name, chart_box = chart_box)
+    ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_outline_item_name, chart_box = outline_box)
     ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name)
+    ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_outline_item_name)
 
 
 MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
@@ -138,14 +154,19 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
                 //reset the count 
                 args.remaining_time_until_update.set(i, timeframe)
                 TimeFrameCandle new_candle = MultiTimeFrameLibrary_getTimeframeCandle(args, timeframe)
-                args.current_candles.set(i, new_candle)
+                
 
                 //optionally draw the new candle
                 if args.debugger.debugger_enabled 
+                    TimeFrameCandle current_candle = args.current_candles.get(i)
+                    int candle_start_point = bar_index
+                    if not na(current_candle)
+                        candle_start_point := current_candle.debug_info.last_bar_index
                     new_candle.debug_info.last_bar_index := bar_index 
-                    new_candle.debug_info.first_bar_index := bar_index - timeframe
+                    new_candle.debug_info.first_bar_index := candle_start_point + 1
                     MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
 
+                args.current_candles.set(i, new_candle)
 
 
 
