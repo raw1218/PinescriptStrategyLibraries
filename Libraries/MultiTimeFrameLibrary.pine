@@ -142,10 +142,9 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
 
                 //optionally draw the new candle
                 if args.debugger.debugger_enabled 
-                    TimeFrameCandleDebugInfo 
                     new_candle.debug_info.last_bar_index := bar_index 
                     new_candle.debug_info.first_bar_index := bar_index - timeframe
-                    MultiTimeFrameLibraryDebugger_drawCandle(args, current_candle)
+                    MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
 
 
 
