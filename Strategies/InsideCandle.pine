@@ -1,0 +1,98 @@
+type InsideCandleInfo 
+    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
+    int bar_index = 0
+
+    bool is_candle_green = false 
+    bool is_candle_red = false 
+    bool is_up_candle = false 
+    bool is_down_candle = false 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+
+helper_InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
+    destination.parent_bar_index := source.parent_bar_index,
+    destination.bar_index := source.bar_index,
+    destination.is_candle_green := source.is_candle_green,
+    destination.is_candle_red := source.is_candle_red,
+    destination.is_up_candle := source.is_up_candle,
+    destination.is_down_candle := source.is_down_candle,
+    destination.is_inside_candle := source.is_inside_candle,
+    destination.is_outside_candle := source.is_outside_candle
+
+
+type InsideCandleArgs
+    InsideCandleInfo current_candle_info = na
+    TimeFrameCandle last_parent_candle = na 
+    InsideCandleInfo last_parent_candle_info = na
+    int timeframe = -1
+
+
+create_InsideCandleArgs() =>
+    InsideCandleArgs args = InsideCandleArgs.new() 
+    args.current_candle_info := InsideCandleInfo.new() 
+    args.last_parent_candle := TimeFrameCandle.new()
+    args.last_parent_candle_info := InsideCandleInfo.new()
+    args
+
+
+
+
+
+helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
+    args.current_candle_info.bar_index := current_candle.bar_index_in_own_timeframe
+    //is candle green or red 
+    bool candle_is_green = current_candle.open_price <= current_candle.close_price
+    bool candle_is_red = current_candle.close_price <= current_candle.open_price
+    args.current_candle_info.is_candle_green := candle_is_green 
+    args.current_candle_info.is_candle_red := candle_is_red
+    //are we completely inside/outside last parent_candle 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+    bool is_up_candle = false 
+    bool is_down_candle = false
+    if not na(args.last_parent_candle)
+        is_inside_candle := (current_candle.high_price <= args.last_parent_candle.high_price) and
+             (current_candle.low_price >= args.last_parent_candle.low_price)
+        is_outside_candle := (current_candle.high_price >= args.last_parent_candle.high_price) and
+             (current_candle.low_price <= args.last_parent_candle.low_price)
+        is_up_candle := (current_candle.high_price >= args.last_parent_candle.high_price) and
+             (current_candle.low_price >= args.last_parent_candle.low_price)
+        is_down_candle := (current_candle.high_price <= args.last_parent_candle.high_price) and
+             (current_candle.low_price <= args.last_parent_candle.low_price)
+
+    
+    //if is an inside candle, don't update last parent candle. Copy its up/down values
+    if is_inside_candle or is_outside_candle
+        args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := true
+        args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
+        args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+    else 
+        args.current_candle_info.parent_bar_index := current_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := false 
+        args.current_candle_info.is_up_candle := is_up_candle 
+        args.current_candle_info.is_down_candle := is_down_candle 
+        MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
+        helper_InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
+    0 //dummy return value 
+
+        
+        
+
+//returns 0 on success, -1 if error 
+InsideCandleLibrary_processCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
+    int return_code = 0
+
+    //ensure we are in same timeframe 
+    if current_candle.timeframe != args.timeframe 
+        if args.timeframe == -1 //potentially initialize timeframe 
+            args.timeframe := current_candle.timeframe 
+        else 
+            return_code := -1 
+
+    if return_code == 0
+        if current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1 //ensure its the next candle
+            helper_InsideCandleLibrary_updateCurrentCandle(args, current_candle)
+    return_code 
+
+

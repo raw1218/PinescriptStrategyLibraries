@@ -42,7 +42,7 @@ type ChartDrawingGroup
 	array<ChartDrawingItem> current_drawings = na
 	array<ChartDrawingItem> finished_drawings = na 
 
-	int max_boxes_in_group = 50 //no more than 50 boxes drawn from this group
+	int max_finished_drawings_in_group = 200 //no more than 50 boxes drawn from this group
 	int max_box_width = 200  //if we try to draw a box thats that big
 
 
@@ -173,7 +173,8 @@ ChartDrawingLibrary_UpdateDrawing(ChartDrawingArgs args, string group_name, stri
 helper_ChartDrawingLibrary_addFinishedDrawing(ChartDrawingArgs args, ChartDrawingItem item, ChartDrawingGroup group) =>
 	group.finished_drawings.push(item)
 	//check if above max 
-	if group.finished_drawings.size() > group.max_boxes_in_group
+	if group.finished_drawings.size() > group.max_finished_drawings_in_group
+		helper_undrawChartDrawingItem(args, group.finished_drawings.get(0))
 		group.finished_drawings.remove(0)//remove first item
 
 //returns 0 on success, 1 on error

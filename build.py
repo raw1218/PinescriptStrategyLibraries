@@ -9,6 +9,7 @@ FILES = [
     "Libraries/BooleanExpressionLibrary.pine",
     "Libraries/KeyLevelLibrary.pine",
     "Libraries/EntryStrategyLibrary.pine",
+    "Strategies/InsideCandle.pine",
     "Strategies/FinalStrategy.pine"
 ]
 

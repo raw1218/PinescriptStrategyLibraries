@@ -26,7 +26,7 @@ FinalStrategy_process_entry(Entry entry) =>
 type customStrategyArgs 
     int num_timeframes = 0 
     array<int> timeframes = na 
-    multi_timeframe_library_args = na 
+    MultiTimeFrameLibraryArgs multi_timeframe_library_args = na 
     array<InsideCandleArgs> timeframe_inside_candle_args = na
 create_customStrategyArgs() => 
     customStrategyArgs args = customStrategyArgs.new() 
@@ -66,12 +66,14 @@ customStrategy_update(customStrategyArgs args) =>
                     MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
 
         
-
+//Initialize Custom Strategy Args
 var customStrategyArgs custom_strategy_args = create_customStrategyArgs()
 var bool is_initialized = false 
 if not is_initialized 
-    customStrategy_addTimeFrame(custom_strategy_args, 5, tracks_inside_candle = true)
-customStrategy_update()
+    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = true)
+    custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
+    custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := true
+customStrategy_update(custom_strategy_args)
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()

@@ -57,7 +57,7 @@ type ChartDrawingGroup
 	array<ChartDrawingItem> current_drawings = na
 	array<ChartDrawingItem> finished_drawings = na 
 
-	int max_boxes_in_group = 50 //no more than 50 boxes drawn from this group
+	int max_finished_drawings_in_group = 200 //no more than 50 boxes drawn from this group
 	int max_box_width = 200  //if we try to draw a box thats that big
 
 
@@ -188,7 +188,8 @@ ChartDrawingLibrary_UpdateDrawing(ChartDrawingArgs args, string group_name, stri
 helper_ChartDrawingLibrary_addFinishedDrawing(ChartDrawingArgs args, ChartDrawingItem item, ChartDrawingGroup group) =>
 	group.finished_drawings.push(item)
 	//check if above max 
-	if group.finished_drawings.size() > group.max_boxes_in_group
+	if group.finished_drawings.size() > group.max_finished_drawings_in_group
+		helper_undrawChartDrawingItem(args, group.finished_drawings.get(0))
 		group.finished_drawings.remove(0)//remove first item
 
 //returns 0 on success, 1 on error
@@ -280,6 +281,7 @@ type TimeFrameCandle
     int bar_index_in_own_timeframe = 0
     bool is_finished = false 
     TimeFrameCandleDebugInfo debug_info = na
+
 MultiTimeFrameLibrary_copyTimeFrameCandle(TimeFrameCandle source, TimeFrameCandle destination) =>
     destination.high_price := source.high_price
     destination.low_price := source.low_price
@@ -288,6 +290,7 @@ MultiTimeFrameLibrary_copyTimeFrameCandle(TimeFrameCandle source, TimeFrameCandl
     destination.timeframe := source.timeframe
     destination.bar_index_in_own_timeframe := source.bar_index_in_own_timeframe
     destination.is_finished := source.is_finished
+
 
     // Ensure debug_info is allocated if not already
     if na(destination.debug_info)
@@ -328,7 +331,6 @@ create_MultiTimeFrameLibraryArgs() =>
     args.time_frames := array.new<int>()
     args.remaining_time_until_update := array.new<int>()
     args.last_timeframe_bar_index := array.new<int>()
-    args.current_candles := array.new<TimeFrameCandle>()
     args.debugger := create_MuliTimeFrameLibraryDebuggingInfo()
     args.output := create_MultiTimeFrameLibraryOutput()
     args 
@@ -359,6 +361,7 @@ MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int m
         args.remaining_time_until_update.push(-1) //mark uninitialized 
         args.last_timeframe_bar_index.push(-1)
         args.output.current_candles.push(na)
+        args.output.timeframe_candle_has_changed.push(false)
         
         //optional debugging / drawing 
         if args.debugger.debugger_enabled
@@ -431,7 +434,7 @@ MultiTimeFrameLibraryDebugger_drawCandle(MultiTimeFrameLibraryArgs args, TimeFra
 
 
 MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
-    args.something_has_changed := false 
+    args.output.something_has_changed := false 
     if args.remaining_time_until_update.size() > 0 
         for i = args.remaining_time_until_update.size() - 1 to 0 
             //check if we have a new candle index 
@@ -441,7 +444,8 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
             int prev_bar_index = args.last_timeframe_bar_index.get(i)
 
             if timeframe_bar_index > prev_bar_index
-                args.something_has_changed := true
+                args.output.something_has_changed := true
+                args.output.timeframe_candle_has_changed.set(i, true)
                 //update previous bar index 
                 args.last_timeframe_bar_index.set(i, timeframe_bar_index)
                 //reset the count 
@@ -1601,6 +1605,107 @@ EntryStrategyLibrary_process_candle(EntryLibraryArgs args) =>
 
 
 
+// === Strategies/InsideCandle.pine ===
+type InsideCandleInfo 
+    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
+    int bar_index = 0
+
+    bool is_candle_green = false 
+    bool is_candle_red = false 
+    bool is_up_candle = false 
+    bool is_down_candle = false 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+
+helper_InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
+    destination.parent_bar_index := source.parent_bar_index,
+    destination.bar_index := source.bar_index,
+    destination.is_candle_green := source.is_candle_green,
+    destination.is_candle_red := source.is_candle_red,
+    destination.is_up_candle := source.is_up_candle,
+    destination.is_down_candle := source.is_down_candle,
+    destination.is_inside_candle := source.is_inside_candle,
+    destination.is_outside_candle := source.is_outside_candle
+
+
+type InsideCandleArgs
+    InsideCandleInfo current_candle_info = na
+    TimeFrameCandle last_parent_candle = na 
+    InsideCandleInfo last_parent_candle_info = na
+    int timeframe = -1
+
+
+create_InsideCandleArgs() =>
+    InsideCandleArgs args = InsideCandleArgs.new() 
+    args.current_candle_info := InsideCandleInfo.new() 
+    args.last_parent_candle := TimeFrameCandle.new()
+    args.last_parent_candle_info := InsideCandleInfo.new()
+    args
+
+
+
+
+
+helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
+    args.current_candle_info.bar_index := current_candle.bar_index_in_own_timeframe
+    //is candle green or red 
+    bool candle_is_green = current_candle.open_price <= current_candle.close_price
+    bool candle_is_red = current_candle.close_price <= current_candle.open_price
+    args.current_candle_info.is_candle_green := candle_is_green 
+    args.current_candle_info.is_candle_red := candle_is_red
+    //are we completely inside/outside last parent_candle 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+    bool is_up_candle = false 
+    bool is_down_candle = false
+    if not na(args.last_parent_candle)
+        is_inside_candle := (current_candle.high_price <= args.last_parent_candle.high_price) and
+             (current_candle.low_price >= args.last_parent_candle.low_price)
+        is_outside_candle := (current_candle.high_price >= args.last_parent_candle.high_price) and
+             (current_candle.low_price <= args.last_parent_candle.low_price)
+        is_up_candle := (current_candle.high_price >= args.last_parent_candle.high_price) and
+             (current_candle.low_price >= args.last_parent_candle.low_price)
+        is_down_candle := (current_candle.high_price <= args.last_parent_candle.high_price) and
+             (current_candle.low_price <= args.last_parent_candle.low_price)
+
+    
+    //if is an inside candle, don't update last parent candle. Copy its up/down values
+    if is_inside_candle or is_outside_candle
+        args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := true
+        args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
+        args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+    else 
+        args.current_candle_info.parent_bar_index := current_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := false 
+        args.current_candle_info.is_up_candle := is_up_candle 
+        args.current_candle_info.is_down_candle := is_down_candle 
+        MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
+        helper_InsideCandleLibrary_copyInsideCandleInfo(current_candle_info, args.last_parent_candle_info)
+    0 //dummy return value 
+
+        
+        
+
+//returns 0 on success, -1 if error 
+InsideCandleLibrary_processCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
+    int return_code = 0
+
+    //ensure we are in same timeframe 
+    if current_candle.timeframe != args.timeframe 
+        if args.timeframe == -1 //potentially initialize timeframe 
+            args.timeframe := current_candle.timeframe 
+        else 
+            return_code := -1 
+
+    if return_code == 0
+        if current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1 //ensure its the next candle
+            helper_InsideCandleLibrary_updateCurrentCandle(args, current_candle)
+    return_code 
+
+
+
+
 // === Strategies/FinalStrategy.pine ===
 //@version=6
 strategy("FinalStrat", calc_on_every_tick = true)
@@ -1630,7 +1735,7 @@ FinalStrategy_process_entry(Entry entry) =>
 type customStrategyArgs 
     int num_timeframes = 0 
     array<int> timeframes = na 
-    multi_timeframe_library_args = na 
+    MultiTimeFrameLibraryArgs multi_timeframe_library_args = na 
     array<InsideCandleArgs> timeframe_inside_candle_args = na
 create_customStrategyArgs() => 
     customStrategyArgs args = customStrategyArgs.new() 
@@ -1670,12 +1775,14 @@ customStrategy_update(customStrategyArgs args) =>
                     MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
 
         
-
+//Initialize Custom Strategy Args
 var customStrategyArgs custom_strategy_args = create_customStrategyArgs()
 var bool is_initialized = false 
 if not is_initialized 
-    customStrategy_addTimeFrame(custom_strategy_args, 5, tracks_inside_candle = true)
-customStrategy_update()
+    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = true)
+    custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
+    custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := true
+customStrategy_update(custom_strategy_args)
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
