@@ -1681,7 +1681,7 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
         MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
-        helper_InsideCandleLibrary_copyInsideCandleInfo(current_candle_info, args.last_parent_candle_info)
+        helper_InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
     0 //dummy return value 
 
         
