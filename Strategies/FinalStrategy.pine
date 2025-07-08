@@ -7,6 +7,8 @@ var bool should_print_entry_tf_candles = input.bool(false, title = "Print Entry 
 var int script_tf_minutes = MiscLibrary_scriptTimeframeInMinutes()
 var bool should_print_higher_tf_fvgs = input.bool(false, title = "Print Higher Timeframe FVGs")
 var bool should_print_entry_tf_fvgs = input.bool(false, title = "Print Entry Timeframe FVGs")
+var bool should_print_higher_tf_candles_label = input.bool(false, title = "Print Higher Timeframe Label")
+var bool should_print_entry_tf_candles_label = input.bool(false, title = "Print Entry Timeframe Label")
 
 var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
 
@@ -123,8 +125,8 @@ if not is_initialized
     customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := false
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,should_print_higher_tf_candles)
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,should_print_entry_tf_candles)
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,value = should_print_higher_tf_candles, value_label = should_print_higher_tf_candles_label)
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,value = should_print_entry_tf_candles, value_label = should_print_entry_tf_candles_label)
      
     timeframe_args_higher_tf := customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
     timeframe_args_entry_tf := customStrategy_getTimeframeArgs(custom_strategy_args, entry_tf_minutes)

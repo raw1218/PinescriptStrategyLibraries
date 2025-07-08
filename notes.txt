@@ -32,3 +32,6 @@ Make MultiTimeFrameLibrary work on non 1 min chart:
         When we breakout: replace the inside candle. Make sure middle candle isn't inside candle or outside candle .
 
         I know the bug. We are storing multiple Inside Infos. They are all to the same pointer so when we change one we change them all. 
+        Lets make it so we can toggle print candle info: 
+
+TODO: make it so one drawing can have multiple boxes / labels. 
