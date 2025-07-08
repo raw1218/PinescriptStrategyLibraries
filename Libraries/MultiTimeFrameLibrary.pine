@@ -195,6 +195,7 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
             [timeframe_bar_index] = request.security(syminfo.tickerid, tf_str, [bar_index])
             int prev_bar_index = args.last_timeframe_bar_index.get(i)
 
+            args.output.timeframe_candle_has_changed.set(i, false) // reset flag
             if timeframe_bar_index > prev_bar_index
                 args.output.something_has_changed := true
                 args.output.timeframe_candle_has_changed.set(i, true)
