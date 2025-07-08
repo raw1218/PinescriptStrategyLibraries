@@ -1641,7 +1641,7 @@ type InsideCandleInfo
     bool is_inside_candle = false 
     bool is_outside_candle = false
 
-helper_InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
+InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
     destination.parent_bar_index := source.parent_bar_index,
     destination.bar_index := source.bar_index,
     destination.is_candle_green := source.is_candle_green,
@@ -1705,7 +1705,7 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
         MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
-        helper_InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
+        InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
     0 //dummy return value 
 
         
@@ -1754,15 +1754,23 @@ create_FairValueGapInfo() =>
     fvg_info.additional_data := create_FairValueGapInfo_AdditionalData()
     fvg_info
 
+type FairValueGapLibraryArgs_DebugInfo
+    bool should_print_FVGs = false 
+    
 type FairValueGapLibraryArgs 
     array<FairValueGapInfo> active_FVGs = na
     int max_active_FVGs = 50
     int num_candles_to_track = 3 //track 3 most recent candles 
     array<TimeFrameCandle> most_recent_candles = na
     array<InsideCandleInfo> most_recent_candles_inside_info = na 
+    bool last_candle_is_inside_candle = false //used to skip processing if the last candle is an inside candle
+
     bool enable_debugging = true    
     ChartDrawingArgs chart_drawing_args = na
+    FairValueGapLibraryArgs_DebugInfo debug_info = na
     
+
+
 create_FairValueGapLibraryArgs() => 
     FairValueGapLibraryArgs args = FairValueGapLibraryArgs.new() 
     args.active_FVGs := array.new<FairValueGapInfo>() 
@@ -1770,23 +1778,46 @@ create_FairValueGapLibraryArgs() =>
     args.most_recent_candles_inside_info := array.new<InsideCandleInfo>()
     args.enable_debugging := false
     args.chart_drawing_args := ChartDrawingLibrary_createChartDrawingArgs()
+    args.debug_info := FairValueGapLibraryArgs_DebugInfo.new()
     args 
+FairValueGapLibraryDebugger_setDebuggerSettings(FairValueGapLibraryArgs args, bool should_print_FVGs)=>
+    args.debug_info.should_print_FVGs := should_print_FVGs
 
-helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info) =>
+
+helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info, bool replace_last_element = false) =>
     // Get the current array size
     int current_size = array.size(args.most_recent_candles)
     int max_size = args.num_candles_to_track
+    InsideCandleInfo inside_candle_info_copy = InsideCandleInfo.new()
+    InsideCandleLibrary_copyInsideCandleInfo(inside_candle_info, inside_candle_info_copy)
 
-    if current_size < max_size
-        // If the array is not full, just append the new candle
-        array.push(args.most_recent_candles, current_candle)
-        array.push(args.most_recent_candles_inside_info, inside_candle_info)
+    //shift the list over 
+    if not replace_last_element
+        if current_size < max_size
+            // If the array is not full, just append the new candle
+            array.push(args.most_recent_candles, current_candle)
+            array.push(args.most_recent_candles_inside_info, inside_candle_info_copy)
+        else
+            // Remove the oldest candle at index 0 and append the new one at the end
+            array.remove(args.most_recent_candles, 0)
+            array.push(args.most_recent_candles, current_candle)
+            array.remove(args.most_recent_candles_inside_info, 0)
+            array.push(args.most_recent_candles_inside_info, inside_candle_info_copy)
+
+    //else replace the last element 
     else
-        // Remove the oldest candle at index 0 and append the new one at the end
         array.remove(args.most_recent_candles, 0)
-        array.push(args.most_recent_candles, current_candle)
         array.remove(args.most_recent_candles_inside_info, 0)
-        array.push(args.most_recent_candles_inside_info, inside_candle_info)
+        current_size -= 1
+        if current_size > 0
+            // Replace the last element with the new candle
+            array.set(args.most_recent_candles, current_size - 1, current_candle)
+            array.set(args.most_recent_candles_inside_info, current_size - 1, inside_candle_info_copy)
+        else
+            // If the array is empty, just append the new candle
+            array.push(args.most_recent_candles, current_candle)
+            array.push(args.most_recent_candles_inside_info, inside_candle_info_copy)
+        
 
 
 helper_FairValueGapLibrary_removeActiveFVG(FairValueGapLibraryArgs args, int active_fvg_index) =>
@@ -1823,9 +1854,9 @@ helper_FairValueGapLibrary_processPotentialFVG(FairValueGapLibraryArgs args) =>
         InsideCandleInfo third_candle_info = args.most_recent_candles_inside_info.get(2)
 
         //check for bullish FVG 
-        bool all_up_candles = (first_candle_info.is_up_candle) and (second_candle_info.is_up_candle) and (third_candle_info.is_up_candle)
-        bool all_down_candles = (first_candle_info.is_down_candle) and (second_candle_info.is_down_candle) and (third_candle_info.is_down_candle)
-        bool is_potentially_a_FVG = (all_up_candles or all_down_candles) and (not second_candle_info.is_outside_candle)
+        bool all_up_candles = (third_candle_info.is_up_candle)
+        bool all_down_candles = (third_candle_info.is_down_candle)
+        bool is_potentially_a_FVG = (all_up_candles or all_down_candles)  and (not second_candle_info.is_inside_candle)
         float fvg_high = 0 
         float fvg_low = 0 
         bool is_bullish_fvg = false 
@@ -1918,16 +1949,20 @@ helper_FairValueGapLibrary_processCandleForFVGs(FairValueGapLibraryArgs args, Ti
 
 //Function to process a candle and update the Fair Value Gap librar
 FairValueGapLibrary_processCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info) =>
-    bool should_skip = false 
-    //skip if we are an inside candle 
-    if inside_candle_info.is_inside_candle
-        should_skip := true
+    if args.last_candle_is_inside_candle
+        //last candle and this candle are both inside candles, skip processing
+        if not inside_candle_info.is_inside_candle
+            args.last_candle_is_inside_candle := false 
+            helper_FairValueGapLibrary_updateMostRecentCandle(args, current_candle, inside_candle_info, replace_last_element = true)
+    else 
+        //last candle was not an inside candle, but this one is, so we process it
+        if inside_candle_info.is_inside_candle 
+            args.last_candle_is_inside_candle := true
+        helper_FairValueGapLibrary_updateMostRecentCandle(args, current_candle, inside_candle_info, replace_last_element = false)
 
-    //otherwise proceed as normal (outside candles should not throw us off)
-    if not should_skip
-        helper_FairValueGapLibrary_updateMostRecentCandle(args, current_candle, inside_candle_info)
-        helper_FairValueGapLibrary_processPotentialFVG(args)
-        helper_FairValueGapLibrary_processCandleForFVGs(args, current_candle)
+    helper_FairValueGapLibrary_processPotentialFVG(args)
+    helper_FairValueGapLibrary_processCandleForFVGs(args, current_candle)
+    if args.enable_debugging and args.debug_info.should_print_FVGs
         helper_FairValueGapLibrary_drawActiveFVGs(args)
 
 
@@ -1942,6 +1977,8 @@ var int entry_tf_minutes = input.int(2, title = "Entry Timeframe in Minutes")
 var bool should_print_higher_tf_candles = input.bool(false, title = "Print Higher Timeframe Candles")
 var bool should_print_entry_tf_candles = input.bool(false, title = "Print Entry Timeframe Candles")
 var int script_tf_minutes = MiscLibrary_scriptTimeframeInMinutes()
+var bool should_print_higher_tf_fvgs = input.bool(false, title = "Print Higher Timeframe FVGs")
+var bool should_print_entry_tf_fvgs = input.bool(false, title = "Print Entry Timeframe FVGs")
 
 var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
 
@@ -2050,14 +2087,22 @@ customStrategy_getTimeframeArgs(CustomStrategyArgs args, int timeframe_in) =>
 //Initialize Custom Strategy Args
 var CustomStrategyArgs custom_strategy_args = create_CustomStrategyArgs()
 var bool is_initialized = false 
+var CustomStrategyTimeframeArgs timeframe_args_higher_tf = na
+var CustomStrategyTimeframeArgs timeframe_args_entry_tf = na
 if not is_initialized 
     // Enable FVG tracking for 5min timeframe (auto-enables inside candles)
     customStrategy_addTimeframe(custom_strategy_args, higher_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
-    customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true)
+    customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := false
     MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,should_print_higher_tf_candles)
     MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,should_print_entry_tf_candles)
+     
+    timeframe_args_higher_tf := customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+    timeframe_args_entry_tf := customStrategy_getTimeframeArgs(custom_strategy_args, entry_tf_minutes)
+    //set should print FVGs
+    FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_higher_tf.fvg_args, should_print_FVGs = should_print_higher_tf_fvgs)
+    FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_entry_tf.fvg_args, should_print_FVGs = should_print_entry_tf_fvgs)
     is_initialized := true
 customStrategy_update(custom_strategy_args)
 

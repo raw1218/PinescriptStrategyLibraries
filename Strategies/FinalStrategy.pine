@@ -5,6 +5,8 @@ var int entry_tf_minutes = input.int(2, title = "Entry Timeframe in Minutes")
 var bool should_print_higher_tf_candles = input.bool(false, title = "Print Higher Timeframe Candles")
 var bool should_print_entry_tf_candles = input.bool(false, title = "Print Entry Timeframe Candles")
 var int script_tf_minutes = MiscLibrary_scriptTimeframeInMinutes()
+var bool should_print_higher_tf_fvgs = input.bool(false, title = "Print Higher Timeframe FVGs")
+var bool should_print_entry_tf_fvgs = input.bool(false, title = "Print Entry Timeframe FVGs")
 
 var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
 
@@ -113,14 +115,22 @@ customStrategy_getTimeframeArgs(CustomStrategyArgs args, int timeframe_in) =>
 //Initialize Custom Strategy Args
 var CustomStrategyArgs custom_strategy_args = create_CustomStrategyArgs()
 var bool is_initialized = false 
+var CustomStrategyTimeframeArgs timeframe_args_higher_tf = na
+var CustomStrategyTimeframeArgs timeframe_args_entry_tf = na
 if not is_initialized 
     // Enable FVG tracking for 5min timeframe (auto-enables inside candles)
     customStrategy_addTimeframe(custom_strategy_args, higher_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
-    customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true)
+    customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := false
     MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,should_print_higher_tf_candles)
     MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,should_print_entry_tf_candles)
+     
+    timeframe_args_higher_tf := customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+    timeframe_args_entry_tf := customStrategy_getTimeframeArgs(custom_strategy_args, entry_tf_minutes)
+    //set should print FVGs
+    FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_higher_tf.fvg_args, should_print_FVGs = should_print_higher_tf_fvgs)
+    FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_entry_tf.fvg_args, should_print_FVGs = should_print_entry_tf_fvgs)
     is_initialized := true
 customStrategy_update(custom_strategy_args)
 
