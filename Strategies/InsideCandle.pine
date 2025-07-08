@@ -82,16 +82,17 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
 //returns 0 on success, -1 if error 
 InsideCandleLibrary_processCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
     int return_code = 0
-
+    bool first_call = false 
     //ensure we are in same timeframe 
     if current_candle.timeframe != args.timeframe 
         if args.timeframe == -1 //potentially initialize timeframe 
             args.timeframe := current_candle.timeframe 
+            first_call := true 
         else 
             return_code := -1 
 
     if return_code == 0
-        if current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1 //ensure its the next candle
+        if (first_call or (current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1)) //ensure its the next candle
             helper_InsideCandleLibrary_updateCurrentCandle(args, current_candle)
     return_code 
 

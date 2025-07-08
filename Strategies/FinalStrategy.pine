@@ -23,37 +23,61 @@ FinalStrategy_process_entry(Entry entry) =>
 
 
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
-type customStrategyArgs 
-    int num_timeframes = 0 
+type CustomStrategyTimeframeArgs 
+    InsideCandleArgs inside_candle_args = na
+    FairValueGapLibraryArgs fvg_args = na
+
+type CustomStrategyArgs 
     array<int> timeframes = na 
     MultiTimeFrameLibraryArgs multi_timeframe_library_args = na 
-    array<InsideCandleArgs> timeframe_inside_candle_args = na
-create_customStrategyArgs() => 
-    customStrategyArgs args = customStrategyArgs.new() 
+    array<CustomStrategyTimeframeArgs> timeframe_args = na
+create_CustomStrategyArgs() => 
+    CustomStrategyArgs args = CustomStrategyArgs.new() 
     args.timeframes := array.new<int>() 
     args.multi_timeframe_library_args := create_MultiTimeFrameLibraryArgs() 
-    args.timeframe_inside_candle_args := array.new<InsideCandleArgs>() 
+    args.timeframe_args := array.new<CustomStrategyTimeframeArgs>() 
     args
 
-customStrategy_addTimeframe(customStrategyArgs args, int timeframe, bool tracks_inside_candle = false) => 
+customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_inside_candle = false, bool tracks_FVGs = false) => 
+    CustomStrategyTimeframeArgs time_frame_args = CustomStrategyTimeframeArgs.new()
     MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
 
-    //inside candle tracker 
+    // If tracking FVGs, we must also track inside candles
+    bool enable_inside_candle = tracks_inside_candle or tracks_FVGs
+
+    // Inside candle tracker 
     InsideCandleArgs inside_candle_args = na 
-    if tracks_inside_candle
+    if enable_inside_candle
         inside_candle_args := create_InsideCandleArgs()
-    args.timeframe_inside_candle_args.push(inside_candle_args)
+    time_frame_args.inside_candle_args := inside_candle_args
+
+    // FVG tracking
+    FairValueGapLibraryArgs fvg_args = na
+    if tracks_FVGs
+        fvg_args := create_FairValueGapLibraryArgs()
+        fvg_args.enable_debugging := true  // Enable drawing/debugging as needed
+    time_frame_args.fvg_args := fvg_args
+
+    args.timeframe_args.push(time_frame_args)
+    args.timeframes.push(timeframe)
 
 
 
-helper_customStrategy_update(customStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
-    //update inside candle lib
-    InsideCandleArgs inside_candle_args = args.timeframe_inside_candle_args.get(timeframe_index)
+helper_customStrategy_update(CustomStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
+    CustomStrategyTimeframeArgs time_frame_args = args.timeframe_args.get(timeframe_index)
+
+    // Update inside candle lib first
+    InsideCandleArgs inside_candle_args = time_frame_args.inside_candle_args
     if not na(inside_candle_args)
         InsideCandleLibrary_processCandle(inside_candle_args, current_candle)
 
+    // Update FVGs if enabled, passing in inside candle info
+    FairValueGapLibraryArgs fvg_args = time_frame_args.fvg_args
+    if not na(fvg_args) and not na(inside_candle_args)
+        InsideCandleInfo inside_info = inside_candle_args.current_candle_info
+        FairValueGapLibrary_processCandle(fvg_args, current_candle, inside_info)
 
-customStrategy_update(customStrategyArgs args) => 
+customStrategy_update(CustomStrategyArgs args) => 
     MultiTimeFrameLibrary_update(args.multi_timeframe_library_args)
     //check if we have any new HTF candles 
     MultiTimeFrameLibraryOutput timeframe_lib_output = args.multi_timeframe_library_args.output
@@ -64,15 +88,27 @@ customStrategy_update(customStrategyArgs args) =>
                 if candle_has_changed
                     TimeFrameCandle current_candle = timeframe_lib_output.current_candles.get(i)
                     MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
+                    helper_customStrategy_update(args, i, current_candle)
 
-        
+//returns CustomStrategyTimeframeArgs of whatever timeframe passed in (pass in timeframe, not index). Returns null if error
+customStrategy_getTimeframeArgs(CustomStrategyArgs args, int timeframe_in) =>
+    CustomStrategyTimeframeArgs result = na 
+    if args.timeframes.size () > 0 
+        for i = args.timeframes.size() - 1 to 0 
+            if args.timeframes.get(i) == timeframe_in 
+                result := args.timeframe_args.get(i)
+                break 
+    result 
+
 //Initialize Custom Strategy Args
-var customStrategyArgs custom_strategy_args = create_customStrategyArgs()
+var CustomStrategyArgs custom_strategy_args = create_CustomStrategyArgs()
 var bool is_initialized = false 
 if not is_initialized 
-    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = true)
+    // Enable FVG tracking for 5min timeframe (auto-enables inside candles)
+    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = false, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := true
+    is_initialized := true
 customStrategy_update(custom_strategy_args)
 
 
@@ -80,6 +116,9 @@ var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
 
+CustomStrategyTimeframeArgs timeframe_args__5min = customStrategy_getTimeframeArgs(custom_strategy_args, 5)
+bool is_inside_candle__5min = timeframe_args__5min.inside_candle_args.current_candle_info.is_inside_candle 
+plotshape(series = is_inside_candle__5min, style = shape.circle, color = color.red, size = size.tiny, location = location.abovebar)
 // simple conditions,  red up candle and green down candle 
 var string red_candle_condition_name = "is_red_candle"
 var string green_candle_condition_name = "is_green_candle"

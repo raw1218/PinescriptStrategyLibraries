@@ -10,6 +10,7 @@ FILES = [
     "Libraries/KeyLevelLibrary.pine",
     "Libraries/EntryStrategyLibrary.pine",
     "Strategies/InsideCandle.pine",
+    "Strategies/FairValueGapLibrary.pine",
     "Strategies/FinalStrategy.pine"
 ]
 

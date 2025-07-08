@@ -1681,7 +1681,7 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
         MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
-        helper_InsideCandleLibrary_copyInsideCandleInfo(current_candle_info, args.last_parent_candle_info)
+        helper_InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
     0 //dummy return value 
 
         
@@ -1690,18 +1690,158 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
 //returns 0 on success, -1 if error 
 InsideCandleLibrary_processCandle(InsideCandleArgs args, TimeFrameCandle current_candle) =>
     int return_code = 0
-
+    bool first_call = false 
     //ensure we are in same timeframe 
     if current_candle.timeframe != args.timeframe 
         if args.timeframe == -1 //potentially initialize timeframe 
             args.timeframe := current_candle.timeframe 
+            first_call := true 
         else 
             return_code := -1 
 
     if return_code == 0
-        if current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1 //ensure its the next candle
+        if (first_call or (current_candle.bar_index_in_own_timeframe - args.current_candle_info.bar_index == 1)) //ensure its the next candle
             helper_InsideCandleLibrary_updateCurrentCandle(args, current_candle)
     return_code 
+
+
+
+
+// === Strategies/FairValueGapLibrary.pine ===
+type FairValueGapInfo_AdditionalData
+    bool tapped_into = false 
+    float tapped_into_deepest_price = 0 
+    bool pending_disrespected  = false //so that we hold onto to see if an IFVG forms before deleting it 
+
+    int draw_left_bar_index = 0 //left bar index (in script timeframe) for drawing the FVG box
+create_FairValueGapInfo_AdditionalData() => 
+    FairValueGapInfo_AdditionalData additional_data = FairValueGapInfo_AdditionalData.new() 
+    additional_data
+
+type FairValueGapInfo 
+    int bar_index = 0 
+    bool is_bullish_fvg = false 
+    bool is_bearish_fvg = false 
+    float FVG_high = 0
+    float FVG_low = 0
+    FairValueGapInfo_AdditionalData additional_data = na
+create_FairValueGapInfo() =>
+    FairValueGapInfo fvg_info = FairValueGapInfo.new() 
+    fvg_info.additional_data := create_FairValueGapInfo_AdditionalData()
+    fvg_info
+
+type FairValueGapLibraryArgs 
+    array<FairValueGapInfo> active_FVGs = na
+    int max_active_FVGs = 50
+    int num_candles_to_track = 3 //track 3 most recent candles 
+    array<TimeFrameCandle> most_recent_candles = na
+    array<InsideCandleInfo> most_recent_candles_inside_info = na 
+    bool enable_debugging = true    
+    ChartDrawingArgs chart_drawing_args = na
+create_FairValueGapLibraryArgs() => 
+    FairValueGapLibraryArgs args = FairValueGapLibraryArgs.new() 
+    args.active_FVGs := array.new<FairValueGapInfo>() 
+    args.most_recent_candles := array.new<TimeFrameCandle>()
+    args.most_recent_candles_inside_info := array.new<InsideCandleInfo>()
+    args.enable_debugging := false
+    args.chart_drawing_args := ChartDrawingLibrary_createChartDrawingArgs()
+    args 
+
+helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info) =>
+    // Get the current array size
+    int current_size = array.size(args.most_recent_candles)
+    int max_size = args.num_candles_to_track
+
+    if current_size < max_size
+        // If the array is not full, just append the new candle
+        array.push(args.most_recent_candles, current_candle)
+        array.push(args.most_recent_candles_inside_info, inside_candle_info)
+    else
+        // Remove the oldest candle at index 0 and append the new one at the end
+        array.remove(args.most_recent_candles, 0)
+        array.push(args.most_recent_candles, current_candle)
+        array.remove(args.most_recent_candles_inside_info, 0)
+        array.push(args.most_recent_candles_inside_info, inside_candle_info)
+
+
+helper_FairValueGapLibrary_addActiveFVG(FairValueGapLibraryArgs args, FairValueGapInfo new_fvg) =>
+    // Add the new FVG
+    array.push(args.active_FVGs, new_fvg)
+    // Remove the oldest if we exceed the max allowed
+    if array.size(args.active_FVGs) > args.max_active_FVGs
+        array.remove(args.active_FVGs, 0)
+
+
+helper_FairValueGapLibrary_processPotentialFVG(FairValueGapLibraryArgs args) => 
+    //scan the most recent three candles to see if there is a gap 
+    //assumes there are no inside candles in the recents 
+    if args.most_recent_candles.size() == args.num_candles_to_track
+        TimeFrameCandle first_candle = args.most_recent_candles.get(0)
+        InsideCandleInfo first_candle_info = args.most_recent_candles_inside_info.get(0)
+        TimeFrameCandle second_candle = args.most_recent_candles.get(1)
+        InsideCandleInfo second_candle_info = args.most_recent_candles_inside_info.get(1)
+        TimeFrameCandle third_candle = args.most_recent_candles.get(2)
+        InsideCandleInfo third_candle_info = args.most_recent_candles_inside_info.get(2)
+
+        //check for bullish FVG 
+        bool all_up_candles = (first_candle_info.is_up_candle) and (second_candle_info.is_up_candle) and (third_candle_info.is_up_candle)
+        bool all_down_candles = (first_candle_info.is_down_candle) and (second_candle_info.is_down_candle) and (third_candle_info.is_down_candle)
+        bool is_potentially_a_FVG = (all_up_candles or all_down_candles) and (not second_candle_info.is_outside_candle)
+        float fvg_high = 0 
+        float fvg_low = 0 
+        bool is_bullish_fvg = false 
+        bool is_bearish_fvg = false 
+        if is_potentially_a_FVG
+            if all_up_candles //check for bullish FVG 
+                if third_candle.low_price > first_candle.high_price
+                    is_bullish_fvg := true 
+                    fvg_high := third_candle.low_price 
+                    fvg_low := first_candle.high_price 
+            else if all_down_candles 
+                if third_candle.high_price < first_candle.low_price 
+                    is_bearish_fvg := true 
+                    fvg_high := first_candle.low_price 
+                    fvg_low := third_candle.high_price 
+        //create the FVG object 
+        if is_bullish_fvg or is_bearish_fvg
+            FairValueGapInfo fvg_info = create_FairValueGapInfo()
+            fvg_info.is_bullish_fvg := is_bullish_fvg
+            fvg_info.is_bearish_fvg := is_bearish_fvg 
+            fvg_info.FVG_high := fvg_high 
+            fvg_info.FVG_low := fvg_low
+            fvg_info.bar_index := second_candle.bar_index_in_own_timeframe
+            fvg_info.additional_data.draw_left_bar_index := second_candle.debug_info.first_bar_index 
+            //add the FVG to the active list
+            helper_FairValueGapLibrary_addActiveFVG(args, fvg_info)
+            
+
+helper_FairValueGapLibrary_drawActiveFVGs(FairValueGapLibraryArgs args) =>
+    if args.enable_debugging and array.size(args.active_FVGs) > 0
+        string group_name = "FVGs_Group"
+        for i = 0 to array.size(args.active_FVGs) - 1
+            FairValueGapInfo fvg = array.get(args.active_FVGs, i)
+            string item_name = "FVG_" + str.tostring(fvg.bar_index)
+            int left = fvg.additional_data.draw_left_bar_index
+            int right = left + 1
+            float top = fvg.FVG_high
+            float bottom = fvg.FVG_low
+            color box_color = color.black
+            color border_color = color.black
+            ChartDrawingBox my_box = ChartDrawingLibrary_createChartDrawingBox(args.chart_drawing_args,top_price = top,bottom_price = bottom,left_bar_index = left,right_bar_index = right,bg_color = box_color,border_color = border_color)
+            ChartDrawingLibrary_UpdateDrawing(args.chart_drawing_args, group_name, item_name, chart_box = my_box)
+
+
+FairValueGapLibrary_processCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info) =>
+    bool should_skip = false 
+    //skip if we are an inside candle 
+    if inside_candle_info.is_inside_candle
+        should_skip := true
+
+    //otherwise proceed as normal (outside candles should not throw us off)
+    if not should_skip
+        helper_FairValueGapLibrary_updateMostRecentCandle(args, current_candle, inside_candle_info)
+        helper_FairValueGapLibrary_processPotentialFVG(args)
+
 
 
 
@@ -1732,37 +1872,61 @@ FinalStrategy_process_entry(Entry entry) =>
 
 
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
-type customStrategyArgs 
-    int num_timeframes = 0 
+type CustomStrategyTimeframeArgs 
+    InsideCandleArgs inside_candle_args = na
+    FairValueGapLibraryArgs fvg_args = na
+
+type CustomStrategyArgs 
     array<int> timeframes = na 
     MultiTimeFrameLibraryArgs multi_timeframe_library_args = na 
-    array<InsideCandleArgs> timeframe_inside_candle_args = na
-create_customStrategyArgs() => 
-    customStrategyArgs args = customStrategyArgs.new() 
+    array<CustomStrategyTimeframeArgs> timeframe_args = na
+create_CustomStrategyArgs() => 
+    CustomStrategyArgs args = CustomStrategyArgs.new() 
     args.timeframes := array.new<int>() 
     args.multi_timeframe_library_args := create_MultiTimeFrameLibraryArgs() 
-    args.timeframe_inside_candle_args := array.new<InsideCandleArgs>() 
+    args.timeframe_args := array.new<CustomStrategyTimeframeArgs>() 
     args
 
-customStrategy_addTimeframe(customStrategyArgs args, int timeframe, bool tracks_inside_candle = false) => 
+customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_inside_candle = false, bool tracks_FVGs = false) => 
+    CustomStrategyTimeframeArgs time_frame_args = CustomStrategyTimeframeArgs.new()
     MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
 
-    //inside candle tracker 
+    // If tracking FVGs, we must also track inside candles
+    bool enable_inside_candle = tracks_inside_candle or tracks_FVGs
+
+    // Inside candle tracker 
     InsideCandleArgs inside_candle_args = na 
-    if tracks_inside_candle
+    if enable_inside_candle
         inside_candle_args := create_InsideCandleArgs()
-    args.timeframe_inside_candle_args.push(inside_candle_args)
+    time_frame_args.inside_candle_args := inside_candle_args
+
+    // FVG tracking
+    FairValueGapLibraryArgs fvg_args = na
+    if tracks_FVGs
+        fvg_args := create_FairValueGapLibraryArgs()
+        fvg_args.enable_debugging := true  // Enable drawing/debugging as needed
+    time_frame_args.fvg_args := fvg_args
+
+    args.timeframe_args.push(time_frame_args)
+    args.timeframes.push(timeframe)
 
 
 
-helper_customStrategy_update(customStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
-    //update inside candle lib
-    InsideCandleArgs inside_candle_args = args.timeframe_inside_candle_args.get(timeframe_index)
+helper_customStrategy_update(CustomStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
+    CustomStrategyTimeframeArgs time_frame_args = args.timeframe_args.get(timeframe_index)
+
+    // Update inside candle lib first
+    InsideCandleArgs inside_candle_args = time_frame_args.inside_candle_args
     if not na(inside_candle_args)
         InsideCandleLibrary_processCandle(inside_candle_args, current_candle)
 
+    // Update FVGs if enabled, passing in inside candle info
+    FairValueGapLibraryArgs fvg_args = time_frame_args.fvg_args
+    if not na(fvg_args) and not na(inside_candle_args)
+        InsideCandleInfo inside_info = inside_candle_args.current_candle_info
+        FairValueGapLibrary_processCandle(fvg_args, current_candle, inside_info)
 
-customStrategy_update(customStrategyArgs args) => 
+customStrategy_update(CustomStrategyArgs args) => 
     MultiTimeFrameLibrary_update(args.multi_timeframe_library_args)
     //check if we have any new HTF candles 
     MultiTimeFrameLibraryOutput timeframe_lib_output = args.multi_timeframe_library_args.output
@@ -1773,15 +1937,27 @@ customStrategy_update(customStrategyArgs args) =>
                 if candle_has_changed
                     TimeFrameCandle current_candle = timeframe_lib_output.current_candles.get(i)
                     MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
+                    helper_customStrategy_update(args, i, current_candle)
 
-        
+//returns CustomStrategyTimeframeArgs of whatever timeframe passed in (pass in timeframe, not index). Returns null if error
+customStrategy_getTimeframeArgs(CustomStrategyArgs args, int timeframe_in) =>
+    CustomStrategyTimeframeArgs result = na 
+    if args.timeframes.size () > 0 
+        for i = args.timeframes.size() - 1 to 0 
+            if args.timeframes.get(i) == timeframe_in 
+                result := args.timeframe_args.get(i)
+                break 
+    result 
+
 //Initialize Custom Strategy Args
-var customStrategyArgs custom_strategy_args = create_customStrategyArgs()
+var CustomStrategyArgs custom_strategy_args = create_CustomStrategyArgs()
 var bool is_initialized = false 
 if not is_initialized 
-    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = true)
+    // Enable FVG tracking for 5min timeframe (auto-enables inside candles)
+    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = false, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := true
+    is_initialized := true
 customStrategy_update(custom_strategy_args)
 
 
@@ -1789,6 +1965,9 @@ var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
 
+CustomStrategyTimeframeArgs timeframe_args__5min = customStrategy_getTimeframeArgs(custom_strategy_args, 5)
+bool is_inside_candle__5min = timeframe_args__5min.inside_candle_args.current_candle_info.is_inside_candle 
+plotshape(series = is_inside_candle__5min, style = shape.circle, color = color.red, size = size.tiny, location = location.abovebar)
 // simple conditions,  red up candle and green down candle 
 var string red_candle_condition_name = "is_red_candle"
 var string green_candle_condition_name = "is_green_candle"
