@@ -61,6 +61,7 @@ type MultiTimeFrameLibraryArgs
     array<int> last_timeframe_bar_index = na 
     MultiTimeFrameLibraryDebuggingInfo debugger = na
     MultiTimeFrameLibraryOutput output = na
+    int script_timeframe = 1 //in minutes, default is 1 minute
 create_MultiTimeFrameLibraryArgs() =>
     MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
     args.time_frames := array.new<int>()
@@ -68,6 +69,8 @@ create_MultiTimeFrameLibraryArgs() =>
     args.last_timeframe_bar_index := array.new<int>()
     args.debugger := create_MuliTimeFrameLibraryDebuggingInfo()
     args.output := create_MultiTimeFrameLibraryOutput()
+    //get the scripts timeframe 
+    args.script_timeframe := MiscLibrary_scriptTimeframeInMinutes()
     args 
 
 
@@ -196,7 +199,7 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
                         candle_start_point := current_candle.debug_info.last_bar_index
                     new_candle.debug_info.last_bar_index := bar_index 
                     new_candle.debug_info.first_bar_index := candle_start_point + 1
-                    if args.debugger.draw_all_candles == true
+                    if (args.debugger.draw_all_candles == true) or (args.debugger.should_print_timeframe.get(i))
                         MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
 
                 args.output.current_candles.set(i, new_candle)

@@ -14,3 +14,13 @@ Higher time frame candles aren't coming out right in live replay mode:
 TODO: 
 Make MultiTimeFrameLibrary work on non 1 min chart. 
 Make MultiTimeFrameLibrary work in real time. 
+
+#########################3
+Make MultiTimeFrameLibrary work on non 1 min chart: 
+
+    step 1: Make is so that if we add a timeframe thats above the current script timeframe, it doesnt work: 
+    keep track of script timeframe. Done. 
+    Need to make it so that we can print better the candles. We have a higher tf and an entry tf. 
+    How can we tell if we have an entry thats touchinga higher tf thing. 
+    How can we print multiple candle tfs. 
+    For now lets just have an option for print higher tf candles, and print entry tf candles: 

@@ -8,4 +8,24 @@ MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, f
     distance_to_stop = entry_price - stop_loss_price
     distance_to_target = target_price - entry_price
     float rr = distance_to_target / distance_to_stop
-    rr <= target_R 
+    rr <= target_R
+
+
+
+// Returns the script's timeframe in minutes using built-in timeframe.* variables
+MiscLibrary_scriptTimeframeInMinutes() =>
+    int tf_minutes = na
+    if timeframe.isseconds
+        tf_minutes := timeframe.multiplier / 60
+    else if timeframe.isminutes
+        tf_minutes := timeframe.multiplier
+    else if timeframe.isdaily
+        tf_minutes := timeframe.multiplier * 1440
+    else if timeframe.isweekly
+        tf_minutes := timeframe.multiplier * 10080
+    else if timeframe.ismonthly
+        tf_minutes := timeframe.multiplier * 43200
+    else
+        tf_minutes := na
+    tf_minutes
+

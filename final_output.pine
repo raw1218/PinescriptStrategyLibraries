@@ -9,7 +9,27 @@ MiscLibrary_isMakingAtMost_R_toPrice(float entry_price, float stop_loss_price, f
     distance_to_stop = entry_price - stop_loss_price
     distance_to_target = target_price - entry_price
     float rr = distance_to_target / distance_to_stop
-    rr <= target_R 
+    rr <= target_R
+
+
+
+// Returns the script's timeframe in minutes using built-in timeframe.* variables
+MiscLibrary_scriptTimeframeInMinutes() =>
+    int tf_minutes = na
+    if timeframe.isseconds
+        tf_minutes := timeframe.multiplier / 60
+    else if timeframe.isminutes
+        tf_minutes := timeframe.multiplier
+    else if timeframe.isdaily
+        tf_minutes := timeframe.multiplier * 1440
+    else if timeframe.isweekly
+        tf_minutes := timeframe.multiplier * 10080
+    else if timeframe.ismonthly
+        tf_minutes := timeframe.multiplier * 43200
+    else
+        tf_minutes := na
+    tf_minutes
+
 
 
 // === Libraries/ChartDrawingLibrary.pine ===
@@ -327,6 +347,7 @@ type MultiTimeFrameLibraryArgs
     array<int> last_timeframe_bar_index = na 
     MultiTimeFrameLibraryDebuggingInfo debugger = na
     MultiTimeFrameLibraryOutput output = na
+    int script_timeframe = 1 //in minutes, default is 1 minute
 create_MultiTimeFrameLibraryArgs() =>
     MultiTimeFrameLibraryArgs args = MultiTimeFrameLibraryArgs.new()
     args.time_frames := array.new<int>()
@@ -334,6 +355,8 @@ create_MultiTimeFrameLibraryArgs() =>
     args.last_timeframe_bar_index := array.new<int>()
     args.debugger := create_MuliTimeFrameLibraryDebuggingInfo()
     args.output := create_MultiTimeFrameLibraryOutput()
+    //get the scripts timeframe 
+    args.script_timeframe := MiscLibrary_scriptTimeframeInMinutes()
     args 
 
 
@@ -462,7 +485,7 @@ MultiTimeFrameLibrary_update(MultiTimeFrameLibraryArgs args) =>
                         candle_start_point := current_candle.debug_info.last_bar_index
                     new_candle.debug_info.last_bar_index := bar_index 
                     new_candle.debug_info.first_bar_index := candle_start_point + 1
-                    if args.debugger.draw_all_candles == true
+                    if (args.debugger.draw_all_candles == true) or (args.debugger.should_print_timeframe.get(i))
                         MultiTimeFrameLibraryDebugger_drawCandle(args, new_candle)
 
                 args.output.current_candles.set(i, new_candle)
@@ -1914,6 +1937,16 @@ FairValueGapLibrary_processCandle(FairValueGapLibraryArgs args, TimeFrameCandle 
 // === Strategies/FinalStrategy.pine ===
 //@version=6
 strategy("FinalStrat", calc_on_every_tick = true, max_boxes_count = 500)
+var int higher_tf_minutes = input.int(7, title = "Higher Timeframe in Minutes")
+var int entry_tf_minutes = input.int(2, title = "Entry Timeframe in Minutes")
+var bool should_print_higher_tf_candles = input.bool(false, title = "Print Higher Timeframe Candles")
+var bool should_print_entry_tf_candles = input.bool(false, title = "Print Entry Timeframe Candles")
+var int script_tf_minutes = MiscLibrary_scriptTimeframeInMinutes()
+
+var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
+
+
+
 //place a trade based on an entry 
 FinalStrategy_process_entry(Entry entry) =>
     bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)
@@ -2001,7 +2034,7 @@ customStrategy_update(CustomStrategyArgs args) =>
                 bool candle_has_changed = timeframe_lib_output.timeframe_candle_has_changed.get(i)
                 if candle_has_changed
                     TimeFrameCandle current_candle = timeframe_lib_output.current_candles.get(i)
-                    MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
+                    //MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
                     helper_customStrategy_update(args, i, current_candle)
 
 //returns CustomStrategyTimeframeArgs of whatever timeframe passed in (pass in timeframe, not index). Returns null if error
@@ -2019,37 +2052,37 @@ var CustomStrategyArgs custom_strategy_args = create_CustomStrategyArgs()
 var bool is_initialized = false 
 if not is_initialized 
     // Enable FVG tracking for 5min timeframe (auto-enables inside candles)
-    customStrategy_addTimeframe(custom_strategy_args, 5, tracks_inside_candle = false, tracks_FVGs = true)
+    customStrategy_addTimeframe(custom_strategy_args, higher_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
+    customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
-    custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := true
+    custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := false
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,should_print_higher_tf_candles)
+    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,should_print_entry_tf_candles)
     is_initialized := true
 customStrategy_update(custom_strategy_args)
+
+
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
+CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
 
-CustomStrategyTimeframeArgs timeframe_args__5min = customStrategy_getTimeframeArgs(custom_strategy_args, 5)
-bool is_inside_candle__5min = timeframe_args__5min.inside_candle_args.current_candle_info.is_inside_candle 
-plotshape(series = is_inside_candle__5min, style = shape.circle, color = color.red, size = size.tiny, location = location.abovebar)
-// simple conditions,  red up candle and green down candle 
-var string red_candle_condition_name = "is_red_candle"
-var string green_candle_condition_name = "is_green_candle"
-var string up_candle_condition_name = "is_up_candle"
-var string down_candle_condition_name = "is_down_candle"
-is_current_candle_red() =>
-	close < open
-is_current_candle_green() => 
-	close > open 
-is_candle_up() => 
-	(high > high[1]) and (low > low[1])
-is_candle_down() => 
-	(high < high[1]) and (low < low[1])
-update_simple_condition(args,red_candle_condition_name,is_current_candle_red())
-update_simple_condition(args,green_candle_condition_name, is_current_candle_green())
-update_simple_condition(args, up_candle_condition_name, is_candle_up())
-update_simple_condition(args, down_candle_condition_name, is_candle_down())
+//base level entry patterns (red up, green down, inside / outside candles)
+var string red_up_candle_condition_name = "is_red_up_candle"
+var string green_down_candle_condition_name = "is_green_down_candle"
+var string inside_candle_condition_name = "is_inside_candle"
+var string outside_candle_condition_name = "is_outside_candle"
+bool is_red_up_candle = timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_candle_red and timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_up_candle and not timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_inside_candle and not timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_outside_candle
+bool is_green_down_candle = timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_candle_green and timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_down_candle and not timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_inside_candle and not timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_outside_candle
+bool is_inside_candle = timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_inside_candle
+bool is_outside_candle = timeframe_args__higher_tf.inside_candle_args.current_candle_info.is_outside_candle
+update_simple_condition(args, red_up_candle_condition_name, is_red_up_candle)
+update_simple_condition(args, green_down_candle_condition_name, is_green_down_candle)
+update_simple_condition(args, inside_candle_condition_name, is_inside_candle)
+update_simple_condition(args, outside_candle_condition_name, is_outside_candle)
+
 
 var string past_start_time_condition_name = "is_past_start_time"
 is_after_datetime(int year_in, int month_in, int day_in, int hour_in, int minute_in) =>
@@ -2058,11 +2091,6 @@ is_after_datetime(int year_in, int month_in, int day_in, int hour_in, int minute
     is_past
 update_simple_condition(args,past_start_time_condition_name, is_after_datetime(2025,6,4,0,0))
 
-// compound conditions 
-var string red_up_candle_condition_name = "is_red_up_candle"
-var string green_down_candle_condition_name = "is_green_down_candle"
-var red_up_condition = create_and_add_compound_condition(args, red_up_candle_condition_name, red_candle_condition_name, up_candle_condition_name, BOOLEAN_OPERATOR.AND)
-var green_down_condition = create_and_add_compound_condition(args, green_down_candle_condition_name, green_candle_condition_name, down_candle_condition_name, BOOLEAN_OPERATOR.AND)
 
 
 // entry actions 
@@ -2144,10 +2172,6 @@ array<Entry> entries = args.trade_library_args.entry_array
 if entries.size() > 0 
     for i = entries.size() - 1 to 0 
         FinalStrategy_process_entry(entries.get(i))
-
-
-
-
 
 
 
