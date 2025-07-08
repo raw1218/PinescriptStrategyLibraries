@@ -1,5 +1,5 @@
 //@version=6
-strategy("FinalStrat", calc_on_every_tick = true)
+strategy("FinalStrat", calc_on_every_tick = true, max_boxes_count = 500)
 //place a trade based on an entry 
 FinalStrategy_process_entry(Entry entry) =>
     bool should_place_trade = (entry.state == EntryState.Placed) and (entry.index == bar_index)

@@ -43,11 +43,11 @@ type ChartDrawingGroup
 	array<ChartDrawingItem> finished_drawings = na 
 
 	int max_finished_drawings_in_group = 200 //no more than 50 boxes drawn from this group
-	int max_box_width = 200  //if we try to draw a box thats that big
 
 
 type ChartDrawingArgs
 	array<ChartDrawingGroup> groups = na
+	int max_box_width = 1500 //max width of a box in bars, if the box is wider it will not be drawn
 ChartDrawingLibrary_createChartDrawingArgs() =>
 	ChartDrawingArgs args = ChartDrawingArgs.new() 
 	args.groups := array.new<ChartDrawingGroup>()
@@ -127,7 +127,8 @@ helper_ChartDrawingLibrary_drawChartHorizontalLine(ChartDrawingArgs args, ChartD
 		chart_line.tv_line_item := line.new(x1 = chart_line.left_x, x2 = chart_line.right_x, y1 = chart_line.price, y2 = chart_line.price, color = chart_line.line_color, style = line.style_solid, width = 2)
 helper_ChartDrawingLibrary_drawChartBox(ChartDrawingArgs args, ChartDrawingBox chart_box) =>
 	if na(chart_box.tv_box_item)
-		chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
+		if (chart_box.right_bar_index - chart_box.left_bar_index) < args.max_box_width 
+			chart_box.tv_box_item := box.new(left = chart_box.left_bar_index,right = chart_box.right_bar_index,top = chart_box.top_price, bottom = chart_box.bottom_price, bgcolor = chart_box.box_color, border_color = chart_box.border_color)
 	//draw lines 
 	if chart_box.horizontal_lines.size() > 0 
 		for i = chart_box.horizontal_lines.size() - 1 to 0 

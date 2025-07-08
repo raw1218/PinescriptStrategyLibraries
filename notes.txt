@@ -6,3 +6,11 @@ Think I found a bug. Its not drawing anything above the inside candles.
 Found the bug: inside candle args.current_candle.bar_index alwasy = 0. 
 Fixed the problems within the inside candle library, but now theres still something wrong. 
 Maybe we are just returning the wrong timeframe. 
+I need to have an array that keeps track of n cancles back. 
+
+We are adding FVG correctly but not drawing it. NOw need to filter out FVGs that are too old. 
+Higher time frame candles aren't coming out right in live replay mode: 
+
+TODO: 
+Make MultiTimeFrameLibrary work on non 1 min chart. 
+Make MultiTimeFrameLibrary work in real time. 

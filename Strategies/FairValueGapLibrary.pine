@@ -28,6 +28,7 @@ type FairValueGapLibraryArgs
     array<InsideCandleInfo> most_recent_candles_inside_info = na 
     bool enable_debugging = true    
     ChartDrawingArgs chart_drawing_args = na
+    
 create_FairValueGapLibraryArgs() => 
     FairValueGapLibraryArgs args = FairValueGapLibraryArgs.new() 
     args.active_FVGs := array.new<FairValueGapInfo>() 
@@ -54,12 +55,26 @@ helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, 
         array.push(args.most_recent_candles_inside_info, inside_candle_info)
 
 
+helper_FairValueGapLibrary_removeActiveFVG(FairValueGapLibraryArgs args, int active_fvg_index) =>
+    // Find the FVG with the matching bar index and remove it
+    FairValueGapInfo fvg = args.active_FVGs.get(active_fvg_index)
+    if not na(fvg)
+        // Remove the FVG from the active list
+        array.remove(args.active_FVGs, active_fvg_index)
+        // Optionally, you can also remove the drawing from the chart if needed
+        string group_name = "FVGs_Group"
+        string item_name = "FVG_" + str.tostring(fvg.bar_index)
+        ChartDrawingLibrary_CancelDrawing(args.chart_drawing_args, group_name, item_name)
+
+
 helper_FairValueGapLibrary_addActiveFVG(FairValueGapLibraryArgs args, FairValueGapInfo new_fvg) =>
     // Add the new FVG
     array.push(args.active_FVGs, new_fvg)
     // Remove the oldest if we exceed the max allowed
     if array.size(args.active_FVGs) > args.max_active_FVGs
-        array.remove(args.active_FVGs, 0)
+        helper_FairValueGapLibrary_removeActiveFVG(args, 0) //remove the oldest FVG
+
+
 
 
 helper_FairValueGapLibrary_processPotentialFVG(FairValueGapLibraryArgs args) => 
@@ -112,15 +127,62 @@ helper_FairValueGapLibrary_drawActiveFVGs(FairValueGapLibraryArgs args) =>
             FairValueGapInfo fvg = array.get(args.active_FVGs, i)
             string item_name = "FVG_" + str.tostring(fvg.bar_index)
             int left = fvg.additional_data.draw_left_bar_index
-            int right = left + 1
+            int right = bar_index  // Draw to the latest bar index instead of left + 1
             float top = fvg.FVG_high
             float bottom = fvg.FVG_low
-            color box_color = color.black
+            // Set color: green for bullish, red for bearish, 25% visible (75 transparency)
+            color base_color = fvg.is_bullish_fvg ? color.green : color.red
+            color box_color = color.new(base_color, 75)
             color border_color = color.black
             ChartDrawingBox my_box = ChartDrawingLibrary_createChartDrawingBox(args.chart_drawing_args,top_price = top,bottom_price = bottom,left_bar_index = left,right_bar_index = right,bg_color = box_color,border_color = border_color)
-            ChartDrawingLibrary_UpdateDrawing(args.chart_drawing_args, group_name, item_name, chart_box = my_box)
+            ChartDrawingLibrary_UpdateDrawing(args.chart_drawing_args,group_name,item_name,chart_box = my_box)
 
 
+//Function to process a candle and see if we interact with any active Fair Value Gap (FVG)
+// Removes invalidated FVGs from the active_FVGs array
+helper_FairValueGapLibrary_processCandleForFVGs(FairValueGapLibraryArgs args, TimeFrameCandle current_candle) =>
+    // Loop backwards so removal is safe
+    if array.size(args.active_FVGs) > 0
+        for i = array.size(args.active_FVGs) - 1 to 0
+            FairValueGapInfo fvg_info = array.get(args.active_FVGs, i)
+            bool is_bullish_fvg = fvg_info.is_bullish_fvg
+            bool is_bearish_fvg = fvg_info.is_bearish_fvg
+            float fvg_high = fvg_info.FVG_high
+            float fvg_low = fvg_info.FVG_low
+            bool tapped_into = false 
+            float tapped_into_deepest_price = 0.0
+            bool invalidated = false
+
+            // For bullish FVG: invalidated if candle closes below FVG low (or low < FVG low)
+            // For bearish FVG: invalidated if candle closes above FVG high (or high > FVG high)
+            if is_bullish_fvg
+                // Tapped into logic
+                if (current_candle.low_price <= fvg_high) and (current_candle.high_price >= fvg_low)
+                    tapped_into := true 
+                    tapped_into_deepest_price := math.max(current_candle.low_price, fvg_low)
+                // Invalidation logic: price blows through the FVG to the downside
+                if current_candle.low_price < fvg_low
+                    invalidated := true
+            else if is_bearish_fvg
+                // Tapped into logic
+                if (current_candle.high_price >= fvg_low) and (current_candle.low_price <= fvg_high)
+                    tapped_into := true 
+                    tapped_into_deepest_price := math.min(current_candle.high_price, fvg_high)
+                // Invalidation logic: price blows through the FVG to the upside
+                if current_candle.high_price > fvg_high
+                    invalidated := true
+
+            // Update the FVG info with the interaction details
+            if tapped_into
+                fvg_info.additional_data.tapped_into := true 
+                fvg_info.additional_data.tapped_into_deepest_price := tapped_into_deepest_price
+
+            // Remove if invalidated, else mark as pending_disrespected
+            if invalidated
+                helper_FairValueGapLibrary_removeActiveFVG(args, i)
+
+
+//Function to process a candle and update the Fair Value Gap librar
 FairValueGapLibrary_processCandle(FairValueGapLibraryArgs args, TimeFrameCandle current_candle, InsideCandleInfo inside_candle_info) =>
     bool should_skip = false 
     //skip if we are an inside candle 
@@ -131,6 +193,8 @@ FairValueGapLibrary_processCandle(FairValueGapLibraryArgs args, TimeFrameCandle 
     if not should_skip
         helper_FairValueGapLibrary_updateMostRecentCandle(args, current_candle, inside_candle_info)
         helper_FairValueGapLibrary_processPotentialFVG(args)
+        helper_FairValueGapLibrary_processCandleForFVGs(args, current_candle)
+        helper_FairValueGapLibrary_drawActiveFVGs(args)
 
 
 

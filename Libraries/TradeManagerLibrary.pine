@@ -204,7 +204,7 @@ type TradeLibraryDebuggingInfo
     color border_color_finished = color.black
 
     bool print_active_trades_when_something_changes = false
-    bool print_trade_data_on_last_bar = true
+    bool print_trade_data_on_last_bar = false
 helper_createTradeLibraryDebuggingInfo()=>
     TradeLibraryDebuggingInfo debugger = TradeLibraryDebuggingInfo.new()
     debugger.chart_drawing_library_args := ChartDrawingLibrary_createChartDrawingArgs()
