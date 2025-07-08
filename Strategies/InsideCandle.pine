@@ -64,7 +64,8 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
     //if is an inside candle, don't update last parent candle. Copy its up/down values
     if is_inside_candle or is_outside_candle
         args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
-        args.current_candle_info.is_inside_candle := true
+        args.current_candle_info.is_inside_candle := is_inside_candle 
+        args.current_candle_info.is_outside_candle := is_outside_candle
         args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
         args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
     else 
