@@ -198,6 +198,8 @@ ChartDrawingLibrary_FinishDrawing(ChartDrawingArgs args, string group_name, stri
 
 
 
+
+
 ChartDrawingLibrary_CancelDrawing(ChartDrawingArgs args, string group_name, string item_name) => 
 	int return_code = 0
 	ChartDrawingGroup group = helper_getChartDrawingGroupByName(args, group_name)

@@ -35,3 +35,28 @@ Make MultiTimeFrameLibrary work on non 1 min chart:
         Lets make it so we can toggle print candle info: 
 
 TODO: make it so one drawing can have multiple boxes / labels. 
+
+####################3
+
+Now lets add a variable to keep track of if we are inside an FVG. 
+Need to find out why this inside FVG vairiable is having false alarms. 
+Its because we need to filter out that we are not the candle right after. 
+Okay now I want to make it so we can add an additional marking to a candle. 
+There is a delay when we use plot shape. We need to modify the actual candle drawings. Lets just add a label type shit. 
+
+Need a function to delete finished drawings. 
+Lets add a minimum FVG size: (in usd)
+
+I think there is going to be a problem when we try to use the 2 min entries and see if they are in a 7m FVG. 
+ 
+Maybe we should process the FVGs on the script candle timeline. 
+Or at least we need to process them on the entry level timeline. 
+
+Ideally, we keep a list of all the active FVGs. 
+Or honestly to avoid all that bs, we should just process the data on the lowest level script timeline. 
+We will only process FVGs with the script level timelime: 
+Okay, now how do I store that a 2 min candle reaches a 7 min fvg. 
+That doesnt even work. Whats the best way to do this: 
+
+Maybe we just have a fucntion in FVG lib for does candle overlap FVG. 
+OKay now its time to put this to the test. 

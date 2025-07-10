@@ -10,6 +10,9 @@ var bool should_print_entry_tf_fvgs = input.bool(false, title = "Print Entry Tim
 var bool should_print_higher_tf_candles_label = input.bool(false, title = "Print Higher Timeframe Label")
 var bool should_print_entry_tf_candles_label = input.bool(false, title = "Print Entry Timeframe Label")
 
+var bool candle_labels_have_FVG_info = input.bool(false, title = "Candle Labels Have FVG Info")
+var float minimum_FVG_size_usd = input.float(9, title = "Minimum FVG Size in USD", step = 0.25)
+
 var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
 
 
@@ -37,14 +40,25 @@ FinalStrategy_process_entry(Entry entry) =>
 
 
 //////////////////////////////////////// TESTING ///////////////////////////////////////////
+type CustomStategyTimeframeArgsDebugger
+    bool should_print_candles = false 
+    bool should_label_candles = false 
+    bool should_draw_FVGs = false
+    bool labels_include_FVG_info = false
+
+    bool is_candle_in_higher_tf_FVG = false
+
 type CustomStrategyTimeframeArgs 
     InsideCandleArgs inside_candle_args = na
     FairValueGapLibraryArgs fvg_args = na
+    CustomStategyTimeframeArgsDebugger debug_info = na
 
 type CustomStrategyArgs 
     array<int> timeframes = na 
     MultiTimeFrameLibraryArgs multi_timeframe_library_args = na 
     array<CustomStrategyTimeframeArgs> timeframe_args = na
+    int highest_tf = 0 
+    int lowest_tf = 0 
 create_CustomStrategyArgs() => 
     CustomStrategyArgs args = CustomStrategyArgs.new() 
     args.timeframes := array.new<int>() 
@@ -54,6 +68,7 @@ create_CustomStrategyArgs() =>
 
 customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_inside_candle = false, bool tracks_FVGs = false) => 
     CustomStrategyTimeframeArgs time_frame_args = CustomStrategyTimeframeArgs.new()
+    time_frame_args.debug_info := CustomStategyTimeframeArgsDebugger.new()
     MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
 
     // If tracking FVGs, we must also track inside candles
@@ -75,10 +90,21 @@ customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_
     args.timeframe_args.push(time_frame_args)
     args.timeframes.push(timeframe)
 
+    //update highest and lowest tf
+    if args.highest_tf == 0 or timeframe > args.highest_tf 
+        args.highest_tf := timeframe
+    if args.lowest_tf == 0 or timeframe < args.lowest_tf
+        args.lowest_tf := timeframe
 
-
-helper_customStrategy_update(CustomStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
+helper_customStrategy_update_highTF(CustomStrategyArgs args, int timeframe, TimeFrameCandle current_candle, bool update_higher_tf_values = false, int higher_tf = -1) =>
+    int timeframe_index = args.timeframes.indexof(timeframe)
     CustomStrategyTimeframeArgs time_frame_args = args.timeframe_args.get(timeframe_index)
+    int higher_tf_index = 0 
+    CustomStrategyTimeframeArgs higher_tf_args = na
+    if update_higher_tf_values
+        higher_tf_index := args.timeframes.indexof(higher_tf)
+        higher_tf_args := args.timeframe_args.get(higher_tf_index)
+
 
     // Update inside candle lib first
     InsideCandleArgs inside_candle_args = time_frame_args.inside_candle_args
@@ -89,7 +115,41 @@ helper_customStrategy_update(CustomStrategyArgs args, int timeframe_index, TimeF
     FairValueGapLibraryArgs fvg_args = time_frame_args.fvg_args
     if not na(fvg_args) and not na(inside_candle_args)
         InsideCandleInfo inside_info = inside_candle_args.current_candle_info
-        FairValueGapLibrary_processCandle(fvg_args, current_candle, inside_info)
+        FairValueGapLibrary_processCandleHighTF(fvg_args, current_candle, inside_info)
+
+
+    //update higher timeframe values if applicable 
+    if update_higher_tf_values and not na(higher_tf_args)
+        //update higher timeframe inside candle values 
+        //update higher timeframe FVG values 
+        FairValueGapLibraryArgs higher_tf_fvg_args = higher_tf_args.fvg_args
+        if not na(higher_tf_fvg_args)
+            bool is_inside_fvg = FairValueGapLibrary_doesCandleInteractWithFVGs(higher_tf_fvg_args, current_candle, overlaps_bearish = true, overlaps_bullish = true)
+            current_candle.debug_info.is_candle_in_higher_tf_FVG := is_inside_fvg
+
+
+    //debugging / drawing 
+    if time_frame_args.debug_info.should_print_candles
+        current_candle.debug_info.candle_should_have_label := time_frame_args.debug_info.should_label_candles
+        if time_frame_args.debug_info.should_label_candles
+            label_text = str.tostring(current_candle.bar_index_in_own_timeframe) + " TF: " + str.tostring(current_candle.timeframe) + "\n"
+            if time_frame_args.debug_info.labels_include_FVG_info
+                if current_candle.debug_info.is_candle_in_higher_tf_FVG
+                    label_text += "In Higher TF FVG\n"
+            current_candle.debug_info.label_text := label_text
+        MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
+
+helper_customStrategy_update_scriptTF(CustomStrategyArgs args, int timeframe_index, TimeFrameCandle current_candle) =>
+    CustomStrategyTimeframeArgs time_frame_args = args.timeframe_args.get(timeframe_index)
+
+    // Update FVGs if enabled, passing in inside candle info
+    FairValueGapLibraryArgs fvg_args = time_frame_args.fvg_args
+    if not na(fvg_args)
+        FairValueGapLibrary_processCandleScriptTF(fvg_args, current_candle)
+
+
+
+
 
 customStrategy_update(CustomStrategyArgs args) => 
     MultiTimeFrameLibrary_update(args.multi_timeframe_library_args)
@@ -101,8 +161,18 @@ customStrategy_update(CustomStrategyArgs args) =>
                 bool candle_has_changed = timeframe_lib_output.timeframe_candle_has_changed.get(i)
                 if candle_has_changed
                     TimeFrameCandle current_candle = timeframe_lib_output.current_candles.get(i)
-                    //MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
-                    helper_customStrategy_update(args, i, current_candle)
+                    int current_tf = args.multi_timeframe_library_args.time_frames.get(i)
+                    if current_tf == args.highest_tf 
+                        helper_customStrategy_update_highTF(args, current_tf, current_candle, update_higher_tf_values = false)
+                    else 
+                        helper_customStrategy_update_highTF(args, current_tf, current_candle, update_higher_tf_values = true, higher_tf = args.highest_tf)
+    // then process the script candle 
+    TimeFrameCandle script_candle = MultiTimeFrameLibrary_createCurrentCandle(args.multi_timeframe_library_args, script_tf_minutes)
+    if args.timeframes.size() > 0 
+        for i = args.timeframes.size() - 1 to 0 
+            helper_customStrategy_update_scriptTF(args, i, script_candle)
+
+            
 
 //returns CustomStrategyTimeframeArgs of whatever timeframe passed in (pass in timeframe, not index). Returns null if error
 customStrategy_getTimeframeArgs(CustomStrategyArgs args, int timeframe_in) =>
@@ -125,14 +195,27 @@ if not is_initialized
     customStrategy_addTimeframe(custom_strategy_args, entry_tf_minutes, tracks_inside_candle = true, tracks_FVGs = true)
     custom_strategy_args.multi_timeframe_library_args.debugger.debugger_enabled := true 
     custom_strategy_args.multi_timeframe_library_args.debugger.draw_all_candles := false
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,value = should_print_higher_tf_candles, value_label = should_print_higher_tf_candles_label)
-    MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,value = should_print_entry_tf_candles, value_label = should_print_entry_tf_candles_label)
+    //MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, higher_tf_minutes,value = should_print_higher_tf_candles, value_label = should_print_higher_tf_candles_label)
+    //MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes,value = should_print_entry_tf_candles, value_label = should_print_entry_tf_candles_label)
      
     timeframe_args_higher_tf := customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
     timeframe_args_entry_tf := customStrategy_getTimeframeArgs(custom_strategy_args, entry_tf_minutes)
-    //set should print FVGs
+    //set should draw candles 
+    timeframe_args_higher_tf.debug_info.should_print_candles := should_print_higher_tf_candles
+    timeframe_args_entry_tf.debug_info.should_print_candles := should_print_entry_tf_candles
+    //set should label candles
+    timeframe_args_higher_tf.debug_info.should_label_candles := should_print_higher_tf_candles_label
+    timeframe_args_entry_tf.debug_info.should_label_candles := should_print_entry_tf_candles_label
+    //set should draw FVGs
     FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_higher_tf.fvg_args, should_print_FVGs = should_print_higher_tf_fvgs)
     FairValueGapLibraryDebugger_setDebuggerSettings(timeframe_args_entry_tf.fvg_args, should_print_FVGs = should_print_entry_tf_fvgs)
+    //set FVG minimum size
+    timeframe_args_higher_tf.fvg_args.minimum_FVG_size_usd := minimum_FVG_size_usd
+    timeframe_args_entry_tf.fvg_args.minimum_FVG_size_usd := minimum_FVG_size_usd
+    //set candle labels should have FVG info  
+    timeframe_args_higher_tf.debug_info.labels_include_FVG_info := candle_labels_have_FVG_info
+    timeframe_args_entry_tf.debug_info.labels_include_FVG_info := candle_labels_have_FVG_info
+    
     is_initialized := true
 customStrategy_update(custom_strategy_args)
 
@@ -157,6 +240,13 @@ update_simple_condition(args, red_up_candle_condition_name, is_red_up_candle)
 update_simple_condition(args, green_down_candle_condition_name, is_green_down_candle)
 update_simple_condition(args, inside_candle_condition_name, is_inside_candle)
 update_simple_condition(args, outside_candle_condition_name, is_outside_candle)
+
+var string price_in_higher_tf_bullish_FVG_condition_name = "is_price_in_bullish_FVG_higher_tf"
+var string price_in_higher_tf_bearish_FVG_condition_name = "is_price_in_bearish_FVG_higher_tf"
+bool is_price_in_bearish_FVG__higher_tf = timeframe_args__higher_tf.fvg_args.is_price_in_bearish_FVG
+bool is_price_in_bullish_FVG__higher_tf = timeframe_args__higher_tf.fvg_args.is_price_in_bullish_FVG
+update_simple_condition(args, price_in_higher_tf_bullish_FVG_condition_name, is_price_in_bullish_FVG__higher_tf)
+update_simple_condition(args, price_in_higher_tf_bearish_FVG_condition_name, is_price_in_bearish_FVG__higher_tf)
 
 
 var string past_start_time_condition_name = "is_past_start_time"

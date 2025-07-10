@@ -5,6 +5,8 @@ type TimeFrameCandleDebugInfo
     bool candle_should_have_label = false
     int first_bar_index = 0
     int last_bar_index = 0
+    string label_text = ""
+    bool is_candle_in_higher_tf_FVG = false
 helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugInfo source, TimeFrameCandleDebugInfo destination) =>
     destination.first_bar_index := source.first_bar_index
     destination.last_bar_index := source.last_bar_index
@@ -96,8 +98,6 @@ MultiTimeFrameLibraryDebugger_toggleDrawHigherTimeFrameCandles(MultiTimeFrameLib
     args.debugger.should_print_timeframe_label.set(time_frame_index, value_label)
 
 
-
-
 MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int minutes) =>
     //make sure it doesnt already exist 
     if helper_getTimeFrameIndex(args, minutes) < 0
@@ -178,7 +178,7 @@ MultiTimeFrameLibraryDebugger_drawCandle(MultiTimeFrameLibraryArgs args, TimeFra
     ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_item_name)
     ChartDrawingLibrary_FinishDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_drawing_outline_item_name)
     if current_candle.debug_info.candle_should_have_label 
-        label_text = str.tostring(current_candle.bar_index_in_own_timeframe) + " : " + str.tostring(current_candle.timeframe) + "m"
+        label_text = current_candle.debug_info.label_text
         ChartDrawingLabel my_label = ChartDrawingLibrary_createChartDrawingLabel(args = args.debugger.chart_drawing_library_args, label_text = label_text, bar_index_x = current_candle.debug_info.first_bar_index, price_y = current_candle.high_price, label_color = color.white)
         string chart_label_item_name = str.tostring(current_candle.bar_index_in_own_timeframe) + "_label"
         ChartDrawingLibrary_UpdateDrawing(args = args.debugger.chart_drawing_library_args, group_name = chart_drawing_group_name, item_name = chart_label_item_name, chart_label = my_label)
@@ -230,5 +230,23 @@ MultiTimeFrameLibrary_isHigherTimeFrameCandleFinished(MultiTimeFrameLibraryArgs 
     int timeframe_index = helper_getTimeFrameIndex(args, minutes)
     args.remaining_time_until_update.get(timeframe_index) == 0
 
+
+//a function to create a candle object from the current bar
+MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int script_tf_in_minutes) =>
+    TimeFrameCandle candle = TimeFrameCandle.new()
+    candle.high_price := high
+    candle.low_price := low
+    candle.open_price := open
+    candle.close_price := close
+    candle.timeframe := script_tf_in_minutes
+    candle.bar_index_in_own_timeframe := bar_index
+    candle.is_finished := true //assume the current bar is finished
+
+    if args.debugger.debugger_enabled
+        candle.debug_info := TimeFrameCandleDebugInfo.new()
+        candle.debug_info.first_bar_index := bar_index
+        candle.debug_info.last_bar_index := bar_index
+
+    candle
                 
                 
