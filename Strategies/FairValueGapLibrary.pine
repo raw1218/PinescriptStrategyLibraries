@@ -21,6 +21,8 @@ create_FairValueGapInfo() =>
     fvg_info.additional_data := create_FairValueGapInfo_AdditionalData()
     fvg_info
 
+
+
 type FairValueGapLibraryArgs_DebugInfo
     bool should_print_FVGs = false 
     
@@ -62,7 +64,7 @@ helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, 
     int current_size = array.size(args.most_recent_candles)
     int max_size = args.num_candles_to_track
     InsideCandleInfo inside_candle_info_copy = InsideCandleInfo.new()
-    InsideCandleLibrary_copyInsideCandleInfo(inside_candle_info, inside_candle_info_copy)
+    copy_InsideCandleInfo(inside_candle_info, inside_candle_info_copy)
 
     //shift the list over 
     if not replace_last_element
@@ -210,6 +212,8 @@ helper_FairValueGapLibrary_processScriptCandleForFVGs(FairValueGapLibraryArgs ar
                     tapped_into := true 
                     tapped_into_deepest_price := math.max(current_candle.low_price, fvg_low)
                     args.is_price_in_bullish_FVG := true
+                    current_candle.additional_info.fvg_candle_info.is_touching_bullish_FVG := true
+                    
 
             else if is_bearish_fvg
                 // Invalidation logic: price blows through the FVG to the upside
@@ -220,6 +224,7 @@ helper_FairValueGapLibrary_processScriptCandleForFVGs(FairValueGapLibraryArgs ar
                     tapped_into := true 
                     tapped_into_deepest_price := math.min(current_candle.high_price, fvg_high)
                     args.is_price_in_bearish_FVG := true
+                    current_candle.additional_info.fvg_candle_info.is_touching_bearish_FVG := true
                     
 
             // Update the FVG info with the interaction details

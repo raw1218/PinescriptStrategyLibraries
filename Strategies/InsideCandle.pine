@@ -1,24 +1,3 @@
-type InsideCandleInfo 
-    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
-    int bar_index = 0
-
-    bool is_candle_green = false 
-    bool is_candle_red = false 
-    bool is_up_candle = false 
-    bool is_down_candle = false 
-    bool is_inside_candle = false 
-    bool is_outside_candle = false
-
-InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
-    destination.parent_bar_index := source.parent_bar_index,
-    destination.bar_index := source.bar_index,
-    destination.is_candle_green := source.is_candle_green,
-    destination.is_candle_red := source.is_candle_red,
-    destination.is_up_candle := source.is_up_candle,
-    destination.is_down_candle := source.is_down_candle,
-    destination.is_inside_candle := source.is_inside_candle,
-    destination.is_outside_candle := source.is_outside_candle
-
 
 type InsideCandleArgs
     InsideCandleInfo current_candle_info = na
@@ -61,6 +40,7 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
              (current_candle.low_price <= args.last_parent_candle.low_price)
 
     
+
     //if is an inside candle, don't update last parent candle. Copy its up/down values
     if is_inside_candle or is_outside_candle
         args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
@@ -74,8 +54,10 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
         MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
-        InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
-    0 //dummy return value 
+        copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
+
+    //copy info into the actual candle structure 
+    copy_InsideCandleInfo(args.current_candle_info, current_candle.additional_info.inside_candle_info)
 
         
         

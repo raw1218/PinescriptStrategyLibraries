@@ -286,6 +286,45 @@ ChartDrawingLibrary_createChartDrawingLabel(ChartDrawingArgs args, string label_
 	
 
 // === Libraries/MultiTimeFrameLibrary.pine ===
+/////////// EXTERNAL types //////////////
+type InsideCandleInfo 
+    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
+    int bar_index = 0
+    bool is_candle_green = false 
+    bool is_candle_red = false 
+    bool is_up_candle = false 
+    bool is_down_candle = false 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+create_InsideCandleInfo() =>
+    InsideCandleInfo info = InsideCandleInfo.new()
+    info 
+copy_InsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
+    destination.parent_bar_index := source.parent_bar_index
+    destination.bar_index := source.bar_index
+    destination.is_candle_green := source.is_candle_green
+    destination.is_candle_red := source.is_candle_red
+    destination.is_up_candle := source.is_up_candle
+    destination.is_down_candle := source.is_down_candle
+    destination.is_inside_candle := source.is_inside_candle
+    destination.is_outside_candle := source.is_outside_candle
+
+type FairValueGapCandleInfo 
+    bool is_touching_bullish_FVG = false 
+    bool is_touching_bearish_FVG = false 
+create_FairValueGapCandleInfo() =>
+    FairValueGapCandleInfo info = FairValueGapCandleInfo.new()
+    info
+type TimeFrameCandle_AdditionalInfo
+    InsideCandleInfo inside_candle_info = na 
+    FairValueGapCandleInfo fvg_candle_info = na 
+create_TimeFrameCandle_AdditionalInfo() =>
+    TimeFrameCandle_AdditionalInfo additional_info = TimeFrameCandle_AdditionalInfo.new()
+    additional_info.inside_candle_info := create_InsideCandleInfo()
+    additional_info.fvg_candle_info := create_FairValueGapCandleInfo()
+    additional_info
+//////////// END EXTERNAL TYPES ///////////////
+
 
 
 type TimeFrameCandleDebugInfo
@@ -299,6 +338,8 @@ helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugIn
     destination.first_bar_index := source.first_bar_index
     destination.last_bar_index := source.last_bar_index
 
+
+
 type TimeFrameCandle
     float high_price = 0 
     float low_price = 0
@@ -308,6 +349,12 @@ type TimeFrameCandle
     int bar_index_in_own_timeframe = 0
     bool is_finished = false 
     TimeFrameCandleDebugInfo debug_info = na
+    TimeFrameCandle_AdditionalInfo additional_info = na
+create_TimeFrameCandle() =>
+    TimeFrameCandle candle = TimeFrameCandle.new()
+    candle.debug_info := TimeFrameCandleDebugInfo.new()
+    candle.additional_info := create_TimeFrameCandle_AdditionalInfo()
+    candle
 
 MultiTimeFrameLibrary_copyTimeFrameCandle(TimeFrameCandle source, TimeFrameCandle destination) =>
     destination.high_price := source.high_price
@@ -404,7 +451,7 @@ MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int m
 
 
 MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int minutes) =>
-    TimeFrameCandle candle = TimeFrameCandle.new()
+    TimeFrameCandle candle = create_TimeFrameCandle()
 
     // Convert to TradingView-compatible timeframe string
     string tf_str = str.tostring(minutes)
@@ -421,8 +468,6 @@ MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int min
     candle.bar_index_in_own_timeframe := barIndex  // This is LTF bar_index; it will be shared across multiple 1m bars
     candle.is_finished := isConfirmed
 
-    if args.debugger.debugger_enabled
-        candle.debug_info := TimeFrameCandleDebugInfo.new()
     candle
 
 helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle candle, bool candle_body) =>
@@ -521,7 +566,7 @@ MultiTimeFrameLibrary_isHigherTimeFrameCandleFinished(MultiTimeFrameLibraryArgs 
 
 //a function to create a candle object from the current bar
 MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int script_tf_in_minutes) =>
-    TimeFrameCandle candle = TimeFrameCandle.new()
+    TimeFrameCandle candle = create_TimeFrameCandle()
     candle.high_price := high
     candle.low_price := low
     candle.open_price := open
@@ -531,7 +576,6 @@ MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int sc
     candle.is_finished := true //assume the current bar is finished
 
     if args.debugger.debugger_enabled
-        candle.debug_info := TimeFrameCandleDebugInfo.new()
         candle.debug_info.first_bar_index := bar_index
         candle.debug_info.last_bar_index := bar_index
 
@@ -1667,27 +1711,6 @@ EntryStrategyLibrary_process_candle(EntryLibraryArgs args) =>
 
 
 // === Strategies/InsideCandle.pine ===
-type InsideCandleInfo 
-    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
-    int bar_index = 0
-
-    bool is_candle_green = false 
-    bool is_candle_red = false 
-    bool is_up_candle = false 
-    bool is_down_candle = false 
-    bool is_inside_candle = false 
-    bool is_outside_candle = false
-
-InsideCandleLibrary_copyInsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
-    destination.parent_bar_index := source.parent_bar_index,
-    destination.bar_index := source.bar_index,
-    destination.is_candle_green := source.is_candle_green,
-    destination.is_candle_red := source.is_candle_red,
-    destination.is_up_candle := source.is_up_candle,
-    destination.is_down_candle := source.is_down_candle,
-    destination.is_inside_candle := source.is_inside_candle,
-    destination.is_outside_candle := source.is_outside_candle
-
 
 type InsideCandleArgs
     InsideCandleInfo current_candle_info = na
@@ -1730,6 +1753,7 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
              (current_candle.low_price <= args.last_parent_candle.low_price)
 
     
+
     //if is an inside candle, don't update last parent candle. Copy its up/down values
     if is_inside_candle or is_outside_candle
         args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
@@ -1743,8 +1767,10 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
         MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
-        InsideCandleLibrary_copyInsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
-    0 //dummy return value 
+        copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
+
+    //copy info into the actual candle structure 
+    copy_InsideCandleInfo(args.current_candle_info, current_candle.additional_info.inside_candle_info)
 
         
         
@@ -1793,6 +1819,8 @@ create_FairValueGapInfo() =>
     fvg_info.additional_data := create_FairValueGapInfo_AdditionalData()
     fvg_info
 
+
+
 type FairValueGapLibraryArgs_DebugInfo
     bool should_print_FVGs = false 
     
@@ -1834,7 +1862,7 @@ helper_FairValueGapLibrary_updateMostRecentCandle(FairValueGapLibraryArgs args, 
     int current_size = array.size(args.most_recent_candles)
     int max_size = args.num_candles_to_track
     InsideCandleInfo inside_candle_info_copy = InsideCandleInfo.new()
-    InsideCandleLibrary_copyInsideCandleInfo(inside_candle_info, inside_candle_info_copy)
+    copy_InsideCandleInfo(inside_candle_info, inside_candle_info_copy)
 
     //shift the list over 
     if not replace_last_element
@@ -1982,6 +2010,8 @@ helper_FairValueGapLibrary_processScriptCandleForFVGs(FairValueGapLibraryArgs ar
                     tapped_into := true 
                     tapped_into_deepest_price := math.max(current_candle.low_price, fvg_low)
                     args.is_price_in_bullish_FVG := true
+                    current_candle.additional_info.fvg_candle_info.is_touching_bullish_FVG := true
+                    
 
             else if is_bearish_fvg
                 // Invalidation logic: price blows through the FVG to the upside
@@ -1992,6 +2022,7 @@ helper_FairValueGapLibrary_processScriptCandleForFVGs(FairValueGapLibraryArgs ar
                     tapped_into := true 
                     tapped_into_deepest_price := math.min(current_candle.high_price, fvg_high)
                     args.is_price_in_bearish_FVG := true
+                    current_candle.additional_info.fvg_candle_info.is_touching_bearish_FVG := true
                     
 
             // Update the FVG info with the interaction details
@@ -2128,13 +2159,18 @@ type CustomStategyTimeframeArgsDebugger
     bool should_label_candles = false 
     bool should_draw_FVGs = false
     bool labels_include_FVG_info = false
-
     bool is_candle_in_higher_tf_FVG = false
 
 type CustomStrategyTimeframeArgs 
     InsideCandleArgs inside_candle_args = na
     FairValueGapLibraryArgs fvg_args = na
     CustomStategyTimeframeArgsDebugger debug_info = na
+
+helper_createCustomStrategyTimeframeArgs() => 
+    CustomStrategyTimeframeArgs args = CustomStrategyTimeframeArgs.new()
+    args.debug_info := CustomStategyTimeframeArgsDebugger.new()
+    args 
+
 
 type CustomStrategyArgs 
     array<int> timeframes = na 
@@ -2150,8 +2186,7 @@ create_CustomStrategyArgs() =>
     args
 
 customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_inside_candle = false, bool tracks_FVGs = false) => 
-    CustomStrategyTimeframeArgs time_frame_args = CustomStrategyTimeframeArgs.new()
-    time_frame_args.debug_info := CustomStategyTimeframeArgsDebugger.new()
+    CustomStrategyTimeframeArgs time_frame_args = helper_createCustomStrategyTimeframeArgs()
     MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
 
     // If tracking FVGs, we must also track inside candles
@@ -2203,13 +2238,13 @@ helper_customStrategy_update_highTF(CustomStrategyArgs args, int timeframe, Time
 
     //update higher timeframe values if applicable 
     if update_higher_tf_values and not na(higher_tf_args)
-        //update higher timeframe inside candle values 
         //update higher timeframe FVG values 
         FairValueGapLibraryArgs higher_tf_fvg_args = higher_tf_args.fvg_args
         if not na(higher_tf_fvg_args)
             bool is_inside_fvg = FairValueGapLibrary_doesCandleInteractWithFVGs(higher_tf_fvg_args, current_candle, overlaps_bearish = true, overlaps_bullish = true)
             current_candle.debug_info.is_candle_in_higher_tf_FVG := is_inside_fvg
 
+    
 
     //debugging / drawing 
     if time_frame_args.debug_info.should_print_candles
@@ -2302,13 +2337,16 @@ if not is_initialized
     is_initialized := true
 customStrategy_update(custom_strategy_args)
 
+CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+
+
 
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
-CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+
 
 //base level entry patterns (red up, green down, inside / outside candles)
 var string red_up_candle_condition_name = "is_red_up_candle"

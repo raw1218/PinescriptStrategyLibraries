@@ -45,13 +45,18 @@ type CustomStategyTimeframeArgsDebugger
     bool should_label_candles = false 
     bool should_draw_FVGs = false
     bool labels_include_FVG_info = false
-
     bool is_candle_in_higher_tf_FVG = false
 
 type CustomStrategyTimeframeArgs 
     InsideCandleArgs inside_candle_args = na
     FairValueGapLibraryArgs fvg_args = na
     CustomStategyTimeframeArgsDebugger debug_info = na
+
+helper_createCustomStrategyTimeframeArgs() => 
+    CustomStrategyTimeframeArgs args = CustomStrategyTimeframeArgs.new()
+    args.debug_info := CustomStategyTimeframeArgsDebugger.new()
+    args 
+
 
 type CustomStrategyArgs 
     array<int> timeframes = na 
@@ -67,8 +72,7 @@ create_CustomStrategyArgs() =>
     args
 
 customStrategy_addTimeframe(CustomStrategyArgs args, int timeframe, bool tracks_inside_candle = false, bool tracks_FVGs = false) => 
-    CustomStrategyTimeframeArgs time_frame_args = CustomStrategyTimeframeArgs.new()
-    time_frame_args.debug_info := CustomStategyTimeframeArgsDebugger.new()
+    CustomStrategyTimeframeArgs time_frame_args = helper_createCustomStrategyTimeframeArgs()
     MultiTimeFrameLibrary_keepTrackofTimeFrame(args.multi_timeframe_library_args, timeframe)
 
     // If tracking FVGs, we must also track inside candles
@@ -120,13 +124,13 @@ helper_customStrategy_update_highTF(CustomStrategyArgs args, int timeframe, Time
 
     //update higher timeframe values if applicable 
     if update_higher_tf_values and not na(higher_tf_args)
-        //update higher timeframe inside candle values 
         //update higher timeframe FVG values 
         FairValueGapLibraryArgs higher_tf_fvg_args = higher_tf_args.fvg_args
         if not na(higher_tf_fvg_args)
             bool is_inside_fvg = FairValueGapLibrary_doesCandleInteractWithFVGs(higher_tf_fvg_args, current_candle, overlaps_bearish = true, overlaps_bullish = true)
             current_candle.debug_info.is_candle_in_higher_tf_FVG := is_inside_fvg
 
+    
 
     //debugging / drawing 
     if time_frame_args.debug_info.should_print_candles
@@ -219,13 +223,16 @@ if not is_initialized
     is_initialized := true
 customStrategy_update(custom_strategy_args)
 
+CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+
+
 
 
 
 var EntryLibraryArgs args = create_EntryLibraryArgs()
 args.trade_library_args.debugger.print_active_trades_when_something_changes := false 
 // want to code in Longs for Green Down Candles, and Shorts for Red Up Candles 
-CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
+
 
 //base level entry patterns (red up, green down, inside / outside candles)
 var string red_up_candle_condition_name = "is_red_up_candle"

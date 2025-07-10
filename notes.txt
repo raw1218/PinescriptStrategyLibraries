@@ -60,3 +60,7 @@ That doesnt even work. Whats the best way to do this:
 
 Maybe we just have a fucntion in FVG lib for does candle overlap FVG. 
 OKay now its time to put this to the test. 
+
+#########################################
+
+TODO: refactor the inside candle and fvg info to be appended to the candle info. 

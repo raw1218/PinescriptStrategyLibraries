@@ -1,3 +1,42 @@
+/////////// EXTERNAL types //////////////
+type InsideCandleInfo 
+    int parent_bar_index = 0 //index in a candles own timeframe. Used for inside and outside canldes
+    int bar_index = 0
+    bool is_candle_green = false 
+    bool is_candle_red = false 
+    bool is_up_candle = false 
+    bool is_down_candle = false 
+    bool is_inside_candle = false 
+    bool is_outside_candle = false
+create_InsideCandleInfo() =>
+    InsideCandleInfo info = InsideCandleInfo.new()
+    info 
+copy_InsideCandleInfo(InsideCandleInfo source, InsideCandleInfo destination) =>
+    destination.parent_bar_index := source.parent_bar_index
+    destination.bar_index := source.bar_index
+    destination.is_candle_green := source.is_candle_green
+    destination.is_candle_red := source.is_candle_red
+    destination.is_up_candle := source.is_up_candle
+    destination.is_down_candle := source.is_down_candle
+    destination.is_inside_candle := source.is_inside_candle
+    destination.is_outside_candle := source.is_outside_candle
+
+type FairValueGapCandleInfo 
+    bool is_touching_bullish_FVG = false 
+    bool is_touching_bearish_FVG = false 
+create_FairValueGapCandleInfo() =>
+    FairValueGapCandleInfo info = FairValueGapCandleInfo.new()
+    info
+type TimeFrameCandle_AdditionalInfo
+    InsideCandleInfo inside_candle_info = na 
+    FairValueGapCandleInfo fvg_candle_info = na 
+create_TimeFrameCandle_AdditionalInfo() =>
+    TimeFrameCandle_AdditionalInfo additional_info = TimeFrameCandle_AdditionalInfo.new()
+    additional_info.inside_candle_info := create_InsideCandleInfo()
+    additional_info.fvg_candle_info := create_FairValueGapCandleInfo()
+    additional_info
+//////////// END EXTERNAL TYPES ///////////////
+
 
 
 type TimeFrameCandleDebugInfo
@@ -11,6 +50,8 @@ helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugIn
     destination.first_bar_index := source.first_bar_index
     destination.last_bar_index := source.last_bar_index
 
+
+
 type TimeFrameCandle
     float high_price = 0 
     float low_price = 0
@@ -20,6 +61,12 @@ type TimeFrameCandle
     int bar_index_in_own_timeframe = 0
     bool is_finished = false 
     TimeFrameCandleDebugInfo debug_info = na
+    TimeFrameCandle_AdditionalInfo additional_info = na
+create_TimeFrameCandle() =>
+    TimeFrameCandle candle = TimeFrameCandle.new()
+    candle.debug_info := TimeFrameCandleDebugInfo.new()
+    candle.additional_info := create_TimeFrameCandle_AdditionalInfo()
+    candle
 
 MultiTimeFrameLibrary_copyTimeFrameCandle(TimeFrameCandle source, TimeFrameCandle destination) =>
     destination.high_price := source.high_price
@@ -116,7 +163,7 @@ MultiTimeFrameLibrary_keepTrackofTimeFrame(MultiTimeFrameLibraryArgs args, int m
 
 
 MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int minutes) =>
-    TimeFrameCandle candle = TimeFrameCandle.new()
+    TimeFrameCandle candle = create_TimeFrameCandle()
 
     // Convert to TradingView-compatible timeframe string
     string tf_str = str.tostring(minutes)
@@ -133,8 +180,6 @@ MultiTimeFrameLibrary_getTimeframeCandle(MultiTimeFrameLibraryArgs args, int min
     candle.bar_index_in_own_timeframe := barIndex  // This is LTF bar_index; it will be shared across multiple 1m bars
     candle.is_finished := isConfirmed
 
-    if args.debugger.debugger_enabled
-        candle.debug_info := TimeFrameCandleDebugInfo.new()
     candle
 
 helper_MultiTimeFrameLibrary_createBoxFromCandle(MultiTimeFrameLibraryArgs args, TimeFrameCandle candle, bool candle_body) =>
@@ -233,7 +278,7 @@ MultiTimeFrameLibrary_isHigherTimeFrameCandleFinished(MultiTimeFrameLibraryArgs 
 
 //a function to create a candle object from the current bar
 MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int script_tf_in_minutes) =>
-    TimeFrameCandle candle = TimeFrameCandle.new()
+    TimeFrameCandle candle = create_TimeFrameCandle()
     candle.high_price := high
     candle.low_price := low
     candle.open_price := open
@@ -243,7 +288,6 @@ MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int sc
     candle.is_finished := true //assume the current bar is finished
 
     if args.debugger.debugger_enabled
-        candle.debug_info := TimeFrameCandleDebugInfo.new()
         candle.debug_info.first_bar_index := bar_index
         candle.debug_info.last_bar_index := bar_index
 
