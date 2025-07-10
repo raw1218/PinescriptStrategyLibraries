@@ -42,18 +42,26 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
     
 
     //if is an inside candle, don't update last parent candle. Copy its up/down values
-    if is_inside_candle or is_outside_candle
+    if is_inside_candle
         args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
         args.current_candle_info.is_inside_candle := is_inside_candle 
         args.current_candle_info.is_outside_candle := is_outside_candle
         args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
         args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+    else if is_outside_candle
+        args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := is_inside_candle
+        args.current_candle_info.is_outside_candle := is_outside_candle
+        args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
+        args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+        MultiTimeFrameLibrary_copyTimeFrameCandle(source = current_candle, destination = args.last_parent_candle)
+        copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
     else 
         args.current_candle_info.parent_bar_index := current_candle.bar_index_in_own_timeframe
         args.current_candle_info.is_inside_candle := false 
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
-        MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
+        MultiTimeFrameLibrary_copyTimeFrameCandle(source = current_candle, destination = args.last_parent_candle)
         copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
 
     //copy info into the actual candle structure 

@@ -8,6 +8,16 @@ type InsideCandleInfo
     bool is_down_candle = false 
     bool is_inside_candle = false 
     bool is_outside_candle = false
+stringify_InsideCandleInfo(InsideCandleInfo info) =>
+    str = "Parent Bar Index: " + str.tostring(info.parent_bar_index) + "\n"
+    str := str + "Bar Index: " + str.tostring(info.bar_index) + "\n"
+    str := str + "Is Candle Green: " + str.tostring(info.is_candle_green) + "\n"
+    str := str + "Is Candle Red: " + str.tostring(info.is_candle_red) + "\n"
+    str := str + "Is Up Candle: " + str.tostring(info.is_up_candle) + "\n"
+    str := str + "Is Down Candle: " + str.tostring(info.is_down_candle) + "\n"
+    str := str + "Is Inside Candle: " + str.tostring(info.is_inside_candle) + "\n"
+    str := str + "Is Outside Candle: " + str.tostring(info.is_outside_candle)
+    str
 create_InsideCandleInfo() =>
     InsideCandleInfo info = InsideCandleInfo.new()
     info 
@@ -45,7 +55,6 @@ type TimeFrameCandleDebugInfo
     int first_bar_index = 0
     int last_bar_index = 0
     string label_text = ""
-    bool is_candle_in_higher_tf_FVG = false
 helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugInfo source, TimeFrameCandleDebugInfo destination) =>
     destination.first_bar_index := source.first_bar_index
     destination.last_bar_index := source.last_bar_index
@@ -294,3 +303,19 @@ MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int sc
     candle
                 
                 
+
+//a function that returns if a candle has changed in a certain timeframe 
+MultiTimeFrameLibrary_hasCandleChanged(MultiTimeFrameLibraryArgs args, int minutes) =>
+    int timeframe_index = helper_getTimeFrameIndex(args, minutes)
+    bool result = false 
+    if timeframe_index >= 0
+        result := args.output.timeframe_candle_has_changed.get(timeframe_index)
+    result 
+
+
+MultiTimeFrameLibrary_getCurrentCandleForTimeframe(MultiTimeFrameLibraryArgs args, int minutes) =>
+    int timeframe_index = helper_getTimeFrameIndex(args, minutes)
+    TimeFrameCandle result = na 
+    if timeframe_index >= 0
+        result := args.output.current_candles.get(timeframe_index)
+    result

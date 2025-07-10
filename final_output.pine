@@ -296,6 +296,16 @@ type InsideCandleInfo
     bool is_down_candle = false 
     bool is_inside_candle = false 
     bool is_outside_candle = false
+stringify_InsideCandleInfo(InsideCandleInfo info) =>
+    str = "Parent Bar Index: " + str.tostring(info.parent_bar_index) + "\n"
+    str := str + "Bar Index: " + str.tostring(info.bar_index) + "\n"
+    str := str + "Is Candle Green: " + str.tostring(info.is_candle_green) + "\n"
+    str := str + "Is Candle Red: " + str.tostring(info.is_candle_red) + "\n"
+    str := str + "Is Up Candle: " + str.tostring(info.is_up_candle) + "\n"
+    str := str + "Is Down Candle: " + str.tostring(info.is_down_candle) + "\n"
+    str := str + "Is Inside Candle: " + str.tostring(info.is_inside_candle) + "\n"
+    str := str + "Is Outside Candle: " + str.tostring(info.is_outside_candle)
+    str
 create_InsideCandleInfo() =>
     InsideCandleInfo info = InsideCandleInfo.new()
     info 
@@ -333,7 +343,6 @@ type TimeFrameCandleDebugInfo
     int first_bar_index = 0
     int last_bar_index = 0
     string label_text = ""
-    bool is_candle_in_higher_tf_FVG = false
 helper_MultiTimeFrameLibrary_copyTimeFrameCandleDebugInfo(TimeFrameCandleDebugInfo source, TimeFrameCandleDebugInfo destination) =>
     destination.first_bar_index := source.first_bar_index
     destination.last_bar_index := source.last_bar_index
@@ -582,6 +591,22 @@ MultiTimeFrameLibrary_createCurrentCandle(MultiTimeFrameLibraryArgs args, int sc
     candle
                 
                 
+
+//a function that returns if a candle has changed in a certain timeframe 
+MultiTimeFrameLibrary_hasCandleChanged(MultiTimeFrameLibraryArgs args, int minutes) =>
+    int timeframe_index = helper_getTimeFrameIndex(args, minutes)
+    bool result = false 
+    if timeframe_index >= 0
+        result := args.output.timeframe_candle_has_changed.get(timeframe_index)
+    result 
+
+
+MultiTimeFrameLibrary_getCurrentCandleForTimeframe(MultiTimeFrameLibraryArgs args, int minutes) =>
+    int timeframe_index = helper_getTimeFrameIndex(args, minutes)
+    TimeFrameCandle result = na 
+    if timeframe_index >= 0
+        result := args.output.current_candles.get(timeframe_index)
+    result
 
 // === Libraries/TradeManagerLibrary.pine ===
 //@version=6
@@ -1755,18 +1780,26 @@ helper_InsideCandleLibrary_updateCurrentCandle(InsideCandleArgs args, TimeFrameC
     
 
     //if is an inside candle, don't update last parent candle. Copy its up/down values
-    if is_inside_candle or is_outside_candle
+    if is_inside_candle
         args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
         args.current_candle_info.is_inside_candle := is_inside_candle 
         args.current_candle_info.is_outside_candle := is_outside_candle
         args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
         args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+    else if is_outside_candle
+        args.current_candle_info.parent_bar_index := args.last_parent_candle.bar_index_in_own_timeframe
+        args.current_candle_info.is_inside_candle := is_inside_candle
+        args.current_candle_info.is_outside_candle := is_outside_candle
+        args.current_candle_info.is_up_candle := args.last_parent_candle_info.is_up_candle
+        args.current_candle_info.is_down_candle := args.last_parent_candle_info.is_down_candle 
+        MultiTimeFrameLibrary_copyTimeFrameCandle(source = current_candle, destination = args.last_parent_candle)
+        copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
     else 
         args.current_candle_info.parent_bar_index := current_candle.bar_index_in_own_timeframe
         args.current_candle_info.is_inside_candle := false 
         args.current_candle_info.is_up_candle := is_up_candle 
         args.current_candle_info.is_down_candle := is_down_candle 
-        MultiTimeFrameLibrary_copyTimeFrameCandle(current_candle, args.last_parent_candle)
+        MultiTimeFrameLibrary_copyTimeFrameCandle(source = current_candle, destination = args.last_parent_candle)
         copy_InsideCandleInfo(args.current_candle_info, args.last_parent_candle_info)
 
     //copy info into the actual candle structure 
@@ -2125,6 +2158,7 @@ var bool should_print_higher_tf_candles_label = input.bool(false, title = "Print
 var bool should_print_entry_tf_candles_label = input.bool(false, title = "Print Entry Timeframe Label")
 
 var bool candle_labels_have_FVG_info = input.bool(false, title = "Candle Labels Have FVG Info")
+var bool candle_labels_have_inside_candle_info = input.bool(false, title = "Candle Labels Have Inside Candle Info")
 var float minimum_FVG_size_usd = input.float(9, title = "Minimum FVG Size in USD", step = 0.25)
 
 var bool has_invalid_input = (script_tf_minutes < entry_tf_minutes) or (script_tf_minutes < higher_tf_minutes) or (entry_tf_minutes > higher_tf_minutes)
@@ -2159,7 +2193,7 @@ type CustomStategyTimeframeArgsDebugger
     bool should_label_candles = false 
     bool should_draw_FVGs = false
     bool labels_include_FVG_info = false
-    bool is_candle_in_higher_tf_FVG = false
+    bool labels_include_inside_candle_info = false
 
 type CustomStrategyTimeframeArgs 
     InsideCandleArgs inside_candle_args = na
@@ -2236,24 +2270,29 @@ helper_customStrategy_update_highTF(CustomStrategyArgs args, int timeframe, Time
         FairValueGapLibrary_processCandleHighTF(fvg_args, current_candle, inside_info)
 
 
-    //update higher timeframe values if applicable 
+    // run candle through higher time frame data (this should override the additional_info of the current candle)
     if update_higher_tf_values and not na(higher_tf_args)
-        //update higher timeframe FVG values 
-        FairValueGapLibraryArgs higher_tf_fvg_args = higher_tf_args.fvg_args
-        if not na(higher_tf_fvg_args)
-            bool is_inside_fvg = FairValueGapLibrary_doesCandleInteractWithFVGs(higher_tf_fvg_args, current_candle, overlaps_bearish = true, overlaps_bullish = true)
-            current_candle.debug_info.is_candle_in_higher_tf_FVG := is_inside_fvg
+        FairValueGapLibrary_processCandleScriptTF(higher_tf_args.fvg_args, current_candle)
 
-    
+
 
     //debugging / drawing 
     if time_frame_args.debug_info.should_print_candles
         current_candle.debug_info.candle_should_have_label := time_frame_args.debug_info.should_label_candles
         if time_frame_args.debug_info.should_label_candles
             label_text = str.tostring(current_candle.bar_index_in_own_timeframe) + " TF: " + str.tostring(current_candle.timeframe) + "\n"
+
+            //inside candle info
+            if time_frame_args.debug_info.labels_include_inside_candle_info
+                label_text += stringify_InsideCandleInfo(current_candle.additional_info.inside_candle_info)
+
+            //fvg info 
             if time_frame_args.debug_info.labels_include_FVG_info
-                if current_candle.debug_info.is_candle_in_higher_tf_FVG
-                    label_text += "In Higher TF FVG\n"
+                if current_candle.additional_info.fvg_candle_info.is_touching_bullish_FVG
+                    label_text += "In Higher TF Bullish FVG\n"
+                if current_candle.additional_info.fvg_candle_info.is_touching_bearish_FVG
+                    label_text += "In Higher TF Bearish FVG\n"
+
             current_candle.debug_info.label_text := label_text
         MultiTimeFrameLibraryDebugger_drawCandle(args.multi_timeframe_library_args, current_candle)
 
@@ -2284,11 +2323,7 @@ customStrategy_update(CustomStrategyArgs args) =>
                         helper_customStrategy_update_highTF(args, current_tf, current_candle, update_higher_tf_values = false)
                     else 
                         helper_customStrategy_update_highTF(args, current_tf, current_candle, update_higher_tf_values = true, higher_tf = args.highest_tf)
-    // then process the script candle 
-    TimeFrameCandle script_candle = MultiTimeFrameLibrary_createCurrentCandle(args.multi_timeframe_library_args, script_tf_minutes)
-    if args.timeframes.size() > 0 
-        for i = args.timeframes.size() - 1 to 0 
-            helper_customStrategy_update_scriptTF(args, i, script_candle)
+
 
             
 
@@ -2333,9 +2368,45 @@ if not is_initialized
     //set candle labels should have FVG info  
     timeframe_args_higher_tf.debug_info.labels_include_FVG_info := candle_labels_have_FVG_info
     timeframe_args_entry_tf.debug_info.labels_include_FVG_info := candle_labels_have_FVG_info
+    //set candle labels should have inside candle info
+    timeframe_args_higher_tf.debug_info.labels_include_inside_candle_info := candle_labels_have_inside_candle_info
+    timeframe_args_entry_tf.debug_info.labels_include_inside_candle_info := candle_labels_have_inside_candle_info
     
     is_initialized := true
 customStrategy_update(custom_strategy_args)
+
+bool is_current_candle_changed__entry_tf = MultiTimeFrameLibrary_hasCandleChanged(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes)
+TimeFrameCandle current_candle__entry_tf = MultiTimeFrameLibrary_getCurrentCandleForTimeframe(custom_strategy_args.multi_timeframe_library_args, entry_tf_minutes)
+
+var bool is_red_up_candle__entry_tf = false 
+var bool is_green_down_candle__entry_tf = false
+var bool is_inside_candle__entry_tf = false
+var bool is_outside_candle__entry_tf = false
+if is_current_candle_changed__entry_tf
+    //UPDATE / READ CURRENT CANDLE INFO
+    //inside candle info 
+    InsideCandleInfo inside_candle_info__entry_tf = current_candle__entry_tf.additional_info.inside_candle_info
+    is_red_up_candle__entry_tf := inside_candle_info__entry_tf.is_candle_red and inside_candle_info__entry_tf.is_up_candle and not inside_candle_info__entry_tf.is_inside_candle  
+    is_green_down_candle__entry_tf := inside_candle_info__entry_tf.is_candle_green and inside_candle_info__entry_tf.is_down_candle and not inside_candle_info__entry_tf.is_inside_candle
+    is_inside_candle__entry_tf := inside_candle_info__entry_tf.is_inside_candle
+    is_outside_candle__entry_tf := inside_candle_info__entry_tf.is_outside_candle
+    // FVG info
+    FairValueGapCandleInfo fvg_candle_info__entry_tf = current_candle__entry_tf.additional_info.fvg_candle_info
+    bool is_price_in_bullish_FVG__entry_tf = fvg_candle_info__entry_tf.is_touching_bullish_FVG
+    bool is_price_in_bearish_FVG__entry_tf = fvg_candle_info__entry_tf.is_touching_bearish_FVG
+    label_text = str.tostring(current_candle__entry_tf.bar_index_in_own_timeframe) + " TF: " + str.tostring(current_candle__entry_tf.timeframe) + "\n"
+    label_text += "Red Up: " + str.tostring(is_red_up_candle__entry_tf) + "\n"
+    label_text += "Green Down: " + str.tostring(is_green_down_candle__entry_tf) + "\n"
+    label_text += "Inside: " + str.tostring(is_inside_candle__entry_tf  ) + "\n"
+    label_text += "Outside: " + str.tostring(is_outside_candle__entry_tf) + "\n"
+    label_text += "In Bullish FVG: " + str.tostring(is_price_in_bullish_FVG__entry_tf) + "\n"
+    label_text += "In Bearish FVG: " + str.tostring(is_price_in_bearish_FVG__entry_tf) + "\n"
+
+    //only draw if we are touching fvg and also in red up or green down candle
+    bool long_entry = is_green_down_candle__entry_tf and is_price_in_bullish_FVG__entry_tf
+    bool short_entry = is_red_up_candle__entry_tf and is_price_in_bearish_FVG__entry_tf
+    if (long_entry or short_entry)
+        label.new(text = label_text, x = bar_index, y = high)
 
 CustomStrategyTimeframeArgs timeframe_args__higher_tf = customStrategy_getTimeframeArgs(custom_strategy_args, higher_tf_minutes)
 

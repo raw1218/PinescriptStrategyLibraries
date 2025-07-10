@@ -64,3 +64,6 @@ OKay now its time to put this to the test.
 #########################################
 
 TODO: refactor the inside candle and fvg info to be appended to the candle info. 
+
+Found a bug. Can a candle be an outside candle and an inside candle at the same time? 
+No, if its an outside candle but its in a haogie, thats still and outside candle. 
